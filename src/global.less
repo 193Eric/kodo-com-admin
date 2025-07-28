@@ -1,0 +1,163 @@
+@import '~ant-design-vue/es/style/themes/default.less';
+
+html,
+body,
+#app,
+#root {
+  height: 100%;
+}
+.ant-pro-global-header-trigger{
+  display: none !important;
+}
+.ant-menu-submenu-arrow{
+  display: none !important;
+}
+.ant-pro-global-header-trigger{
+  // display: none !important;
+}
+.ant-btn-primary:hover{
+  background: #000 !important;
+}
+.ant-btn-primary[disabled]{
+  color: #fff !important;
+}
+.ant-btn.ant-btn-primary:hover, .ant-btn.ant-btn-primary:focus{
+  color: #fff !important;
+  background: #11253e !important;
+}
+.ant-btn.ant-btn-primary:hover{
+    color: #fff !important;
+  background: #11253e !important;
+}
+.ant-pro-global-header-index-right .ant-pro-global-header-index-action{
+  padding-left: 0 !important;
+}
+.ant-card{
+  border: none !important;
+  box-shadow: none !important;
+}
+.ant-card-body{
+
+    padding: 0 !important;
+  margin: 0 !important;
+}
+.trustpay-lang-select{
+  padding-right: 0 !important;
+  min-width: 80px !important;
+}
+
+.ant-menu-submenu-selected .anticon{
+  color: #8A5CFA !important;
+}
+.ant-layout-footer{
+  display: none;
+}
+.ant-breadcrumb{
+  display: none !important;
+}
+.ant-pro-sider-menu-sider.light{
+  box-shadow: none !important;
+}
+.ant-pro-basicLayout .ant-layout-content{
+  background: #fff !important;
+}
+.ant-pro-basicLayout .ant-layout{
+  background: #fff !important;
+}
+.ant-pro-global-header{
+  box-shadow: none !important;
+  border-bottom: 1px solid #EFF1F3 !important;
+}
+.ant-pro-sider-menu-sider.light .ant-pro-sider-menu-logo{
+  background: none !important;
+  box-shadow:none !important;
+}
+
+.colorWeak {
+  filter: invert(80%);
+}
+
+.ant-layout.layout-basic {
+  height: 100vh;
+  min-height: 100vh;
+}
+
+canvas {
+  display: block;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizelegibility;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+// 数据列表 样式
+.table-alert {
+  margin-bottom: 16px;
+}
+// 数据列表 操作
+.table-operator {
+  margin-bottom: 18px;
+
+  button {
+    margin-right: 8px;
+  }
+}
+// 数据列表 搜索条件
+.table-page-search-wrapper {
+  .ant-form-inline {
+    .ant-form-item {
+      display: flex;
+      margin-right: 0;
+      margin-bottom: 24px;
+
+      .ant-form-item-control-wrapper {
+        flex: 1 1;
+        display: inline-block;
+        vertical-align: middle;
+      }
+
+      > .ant-form-item-label {
+        width: auto;
+        padding-right: 8px;
+        line-height: 32px;
+      }
+
+      .ant-form-item-control {
+        height: 32px;
+        line-height: 32px;
+      }
+    }
+  }
+
+  .table-page-search-submitButtons {
+    display: block;
+    margin-bottom: 24px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: @screen-xs) {
+  .ant-table {
+    width: 100%;
+    overflow-x: auto;
+
+    &-thead > tr,
+    &-tbody > tr {
+      > th,
+      > td {
+        white-space: pre;
+
+        > span {
+          display: block;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,484 @@
+// BasicLayout.less - Trustpay风格样式
+
+// 全局变量定义
+@trustpay-primary: #11253e;
+@trustpay-sidebar-bg: #f8fafc;
+@trustpay-border-color: #e5e7eb;
+@trustpay-text-primary: #111827;
+@trustpay-text-secondary: #4b5563;
+@trustpay-text-light: #6b7280;
+@trustpay-bg-light: #f9fafb;
+@trustpay-hover-bg: #eff6ff;
+
+// 重置一些默认样式
+* {
+  box-sizing: border-box;
+}
+
+// 主布局容器
+.trustpay-layout {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  
+  // 侧边栏样式
+  .ant-pro-sider {
+    background: @trustpay-sidebar-bg !important;
+    border-right: 1px solid @trustpay-border-color !important;
+    
+    // Logo区域
+    .ant-pro-sider-logo {
+      background: @trustpay-sidebar-bg !important;
+      border-bottom: 1px solid @trustpay-border-color !important;
+      padding: 20px 24px !important;
+      height: auto !important;
+      
+      .trustpay-logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        
+        .logo-text {
+          font-size: 28x;
+          font-weight: 700;
+          color: #000;
+        }
+        
+        .logo-star {
+          font-size: 16px;
+          line-height: 1;
+        }
+      }
+    }
+    
+    // 菜单容器
+    .ant-menu-root {
+      background: transparent !important;
+      border: none !important;
+      padding: 16px 12px;
+    }
+    
+    // 菜单项样式
+    .ant-menu {
+      background: transparent !important;
+      border-right: none !important;
+      padding: 16px 12px;
+      
+      // 一级菜单项
+      .ant-menu-item {
+        color: @trustpay-text-secondary !important;
+        font-weight: 500;
+        margin: 4px 0 !important;
+        border-radius: 8px !important;
+        height: 40px !important;
+        line-height: 40px !important;
+        padding: 0 16px !important;
+        transition: all 0.2s ease;
+        
+        // 图标样式
+        .anticon {
+          font-size: 16px;
+          margin-right: 12px;
+          color: inherit;
+        }
+        
+        // hover状态
+        &:hover {
+          color: @trustpay-primary !important;
+          background-color: @trustpay-hover-bg !important;
+        }
+        
+        // 选中状态
+        &.ant-menu-item-selected {
+          background-color: @trustpay-hover-bg !important;
+          color: @trustpay-primary !important;
+          font-weight: 600;
+          
+          &::after {
+            display: none !important;
+          }
+        }
+        
+        // 激活状态
+        &.ant-menu-item-active {
+          color: @trustpay-primary !important;
+          background-color: @trustpay-hover-bg !important;
+        }
+      }
+      
+      // 子菜单
+      .ant-menu-submenu {
+        .ant-menu-submenu-title {
+          color: @trustpay-text-secondary !important;
+          font-weight: 500;
+          margin: 4px 0 !important;
+          border-radius: 8px !important;
+          height: 40px !important;
+          line-height: 40px !important;
+          padding: 0 16px !important;
+          
+          .anticon {
+            font-size: 16px;
+            margin-right: 12px;
+          }
+          
+          &:hover {
+            color: @trustpay-primary !important;
+            background-color: @trustpay-hover-bg !important;
+          }
+        }
+        
+        // 展开状态
+        &.ant-menu-submenu-open,
+        &.ant-menu-submenu-selected {
+          .ant-menu-submenu-title {
+            color: @trustpay-primary !important;
+            background-color: @trustpay-hover-bg !important;
+          }
+        }
+        
+        // 子菜单容器
+        .ant-menu-sub {
+          background: transparent !important;
+          
+          .ant-menu-item {
+            padding-left: 48px !important;
+            color: @trustpay-text-light !important;
+            font-size: 14px;
+            
+            &:hover {
+              color: @trustpay-primary !important;
+              background-color: @trustpay-hover-bg !important;
+            }
+            
+            &.ant-menu-item-selected {
+              background-color: @trustpay-hover-bg !important;
+              color: @trustpay-primary !important;
+            }
+          }
+        }
+      }
+      
+      // 收起状态下的菜单
+      &.ant-menu-inline-collapsed {
+        .ant-menu-item {
+          padding: 0 16px !important;
+          
+          .anticon {
+            margin-right: 0;
+          }
+        }
+      }
+    }
+  }
+  
+  // 顶部Header样式
+  .ant-pro-global-header {
+    background: #ffffff !important;
+    border-bottom: 1px solid @trustpay-border-color !important;
+    box-shadow: none !important;
+    height: 64px !important;
+    padding: 0 24px !important;
+    
+    // 折叠按钮
+    .ant-pro-global-header-trigger {
+      color: @trustpay-text-secondary !important;
+      padding: 8px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      
+      &:hover {
+        color: @trustpay-primary !important;
+        background: @trustpay-bg-light !important;
+      }
+      
+      .anticon {
+        font-size: 16px;
+      }
+    }
+    
+    // 左侧内容区
+    .header-left-content {
+      display: flex;
+      align-items: center;
+      height: 64px;
+    }
+  }
+  
+  // 主内容区域
+  .ant-pro-basicLayout-content {
+    background: @trustpay-bg-light !important;
+    min-height: calc(100vh - 64px);
+    
+    .ant-layout-content {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+  }
+}
+
+// 右侧Header内容样式
+.trustpay-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 64px;
+  
+  // 操作按钮
+  .header-action-btn {
+    color: @trustpay-text-secondary;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    border: none;
+    background: transparent;
+    
+    &:hover {
+      color: @trustpay-primary;
+      background: @trustpay-bg-light;
+    }
+    
+    &:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+    }
+    
+    .anticon {
+      font-size: 16px;
+    }
+  }
+  
+  // 语言选择器
+  .language-select {
+    .ant-select-selector {
+      border: none !important;
+      background: transparent !important;
+      color: @trustpay-text-secondary;
+      padding: 4px 8px !important;
+      height: 32px !important;
+      border-radius: 6px !important;
+      
+      .ant-select-selection-item {
+        color: @trustpay-text-secondary;
+        padding: 0;
+        
+        .language-option {
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+      }
+      
+      .ant-select-arrow {
+        color: @trustpay-text-secondary;
+      }
+    }
+    
+    &:hover .ant-select-selector {
+      color: @trustpay-primary;
+      background: @trustpay-bg-light !important;
+    }
+    
+    &.ant-select-focused .ant-select-selector {
+      border: none !important;
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2) !important;
+    }
+  }
+  
+  // 用户信息
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      background: @trustpay-bg-light;
+    }
+    
+    .user-avatar {
+      background-color: @trustpay-primary;
+      color: #ffffff;
+      font-weight: 600;
+      width: 28px;
+      height: 28px;
+      font-size: 13px;
+    }
+    
+    .user-email {
+      color: @trustpay-text-secondary;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+  }
+}
+
+// 收起状态的特殊样式
+.trustpay-layout.ant-pro-basicLayout-has-sider {
+  .ant-pro-sider.ant-pro-sider-collapsed {
+    .ant-pro-sider-logo {
+      .trustpay-logo {
+        justify-content: center;
+        
+        .logo-text {
+          display: none;
+        }
+        
+        .logo-star {
+          font-size: 20px;
+        }
+      }
+    }
+    
+    // 收起状态下的菜单项
+    .ant-menu-item {
+      text-align: center;
+      
+      .anticon {
+        margin-right: 0 !important;
+      }
+    }
+  }
+}
+
+// 响应式设计
+@media (max-width: 992px) {
+  .trustpay-header-right {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .trustpay-header-right {
+    .user-email {
+      display: none;
+    }
+    
+    .language-select {
+      .language-option {
+        font-size: 12px;
+      }
+    }
+  }
+  
+  .ant-pro-global-header {
+    padding: 0 16px !important;
+  }
+}
+
+@media (max-width: 576px) {
+  .trustpay-header-right {
+    gap: 4px;
+    
+    .header-action-btn {
+      width: 32px;
+      height: 32px;
+    }
+  }
+}
+
+// Footer样式调整
+.ant-pro-basicLayout-footer {
+  background: transparent;
+  padding: 24px 0;
+}
+
+// 一些全局组件的样式增强，确保与Trustpay风格一致
+.ant-card {
+  border-radius: 12px;
+  border: 1px solid @trustpay-border-color;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  
+  .ant-card-head {
+    border-bottom: 1px solid @trustpay-border-color;
+    
+    .ant-card-head-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: @trustpay-text-primary;
+    }
+  }
+}
+
+.ant-btn {
+  border-radius: 8px;
+  font-weight: 500;
+  
+  &.ant-btn-primary {
+    background: @trustpay-primary;
+    border-color: @trustpay-primary;
+    
+    &:hover,
+    &:focus {
+      background: #40a9ff;
+      border-color: #40a9ff;
+    }
+  }
+}
+
+.ant-input {
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  
+  &:focus,
+  &:hover {
+    border-color: @trustpay-primary;
+  }
+  
+  &:focus {
+    box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.1);
+  }
+}
+
+.ant-select {
+  .ant-select-selector {
+    border-radius: 8px;
+  }
+  
+  &.ant-select-focused .ant-select-selector {
+    border-color: @trustpay-primary;
+    box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.1);
+  }
+}
+
+// 修复一些可能的样式冲突
+.ant-pro-basicLayout {
+  .ant-layout {
+    background: @trustpay-bg-light;
+  }
+  
+  .ant-layout-content {
+    background: @trustpay-bg-light;
+  }
+}
+
+// 确保侧边栏在所有状态下都有正确的样式
+.ant-layout-sider {
+  background: @trustpay-sidebar-bg !important;
+}
+
+// 滚动条样式
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+  
+  &:hover {
+    background: #a8a8a8;
+  }
+}
