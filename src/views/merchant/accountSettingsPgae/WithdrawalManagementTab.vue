@@ -5,16 +5,18 @@
       <a-row :gutter="16">
         <a-col :span="4">
           <a-input
-            v-model="filters.clientId"
+            v-model="filters.merchant_no"
             placeholder="Client ID"
             size="default"
+            allow-clear
           />
         </a-col>
         <a-col :span="4">
           <a-input
-            v-model="filters.clientName"
+            v-model="filters.merchant_name"
             placeholder="Client Name"
             size="default"
+            allow-clear
           />
         </a-col>
         <a-col :span="4">
@@ -33,33 +35,7 @@
             <a-select-option value="Mexico">Mexico</a-select-option>
           </a-select>
           <a-select
-            v-model="filters.channel"
-            placeholder="Channel"
-            size="default"
-            style="width: 100%"
-            allowClear
-            v-if="viewMode === 'digital'"
-          >
-            <a-select-option value="">All</a-select-option>
-            <a-select-option value="TRC20">TRC20</a-select-option>
-            <a-select-option value="ERC20">ERC20</a-select-option>
-          </a-select>
-        </a-col>
-        <a-col :span="4">
-          <a-select
-            v-model="filters.accountType"
-            placeholder="Account Type"
-            size="default"
-            style="width: 100%"
-            allowClear
-            v-if="viewMode === 'fiat'"
-          >
-            <a-select-option value="">All</a-select-option>
-            <a-select-option value="virtual account">virtual account</a-select-option>
-            <a-select-option value="institution account">institution account</a-select-option>
-          </a-select>
-          <a-select
-            v-model="filters.currency"
+            v-model="filters.currency_name"
             placeholder="Currency"
             size="default"
             style="width: 100%"
@@ -69,6 +45,22 @@
             <a-select-option value="">All</a-select-option>
             <a-select-option value="USDT">USDT</a-select-option>
             <a-select-option value="USDC">USDC</a-select-option>
+            <a-select-option value="BTC">BTC</a-select-option>
+            <a-select-option value="ETH">ETH</a-select-option>
+          </a-select>
+        </a-col>
+        <a-col :span="4" v-if="viewMode === 'fiat'">
+          <a-select
+            v-model="filters.accountType"
+            placeholder="Account Type"
+            size="default"
+            style="width: 100%"
+            allowClear
+
+          >
+            <a-select-option value="">All</a-select-option>
+            <a-select-option value="virtual account">virtual account</a-select-option>
+            <a-select-option value="institution account">institution account</a-select-option>
           </a-select>
         </a-col>
         <a-col :span="4">
@@ -80,13 +72,12 @@
             allowClear
           >
             <a-select-option value="">All</a-select-option>
-            <a-select-option value="Pending">Pending</a-select-option>
-            <a-select-option value="Actived">Actived</a-select-option>
-            <a-select-option value="Disable">Disable</a-select-option>
+            <a-select-option value="1">Actived</a-select-option>
+            <a-select-option value="-1">Disable</a-select-option>
           </a-select>
         </a-col>
         <a-col :span="4">
-          <a-button type="primary" @click="handleSearch" style="margin-right: 8px">
+          <a-button type="primary" @click="handleSearch" :loading="loading" style="margin-right: 8px">
             Search
           </a-button>
           <a-button @click="handleReset">
@@ -118,11 +109,13 @@
     <div class="table-section">
       <a-table
         :columns="currentColumns"
-        :dataSource="filteredData"
+        :dataSource="dataList"
         :pagination="pagination"
         :scroll="{ x: 1600 }"
+        :loading="loading"
         rowKey="key"
         size="middle"
+        @change="handleTableChange"
       >
         <!-- 实体国家/地区列自定义渲染 -->
         <template slot="entityCountry" slot-scope="text, record">
@@ -147,14 +140,19 @@
           </div>
         </template>
 
+        <!-- Rate列自定义渲染 -->
+        <template slot="rate" slot-scope="text, record">
+          {{ (parseFloat(record.rate_fee || 0) * 100) + '%' }}
+        </template>
+
         <!-- 状态列自定义渲染 - 不可点击 -->
         <template slot="status" slot-scope="text, record">
           <a-tag
-            :color="getStatusColor(text)"
+            :color="getStatusColor(record.statusText)"
             class="status-tag"
           >
-            <a-icon :type="getStatusIcon(text)" />
-            {{ text }}
+            <a-icon :type="getStatusIcon(record.statusText)" />
+            {{ record.statusText }}
           </a-tag>
         </template>
 
@@ -165,10 +163,10 @@
               type="link"
               size="small"
               @click="handleReview(record)"
-              :class="{ 'review-action': record.status === 'Pending' }"
+              :class="{ 'review-action': record.statusText === 'Pending' }"
               style="margin-right: 8px"
             >
-              {{ record.status === 'Pending' ? 'Review' : 'View' }}
+              {{ record.statusText === 'Pending' ? 'Review' : 'View' }}
             </a-button>
             <a-button
               type="link"
@@ -195,37 +193,26 @@
         <a-row :gutter="[16, 24]">
           <a-col :span="12">
             <div class="detail-item">
+              <div class="detail-label">Fee ID</div>
+              <div class="detail-value">{{ selectedRecord.id }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
               <div class="detail-label">Client ID</div>
-              <div class="detail-value">{{ selectedRecord.clientId }}</div>
+              <div class="detail-value">{{ selectedRecord.merchant?.merchant_no || '-' }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
               <div class="detail-label">Client Name</div>
-              <div class="detail-value">{{ selectedRecord.clientName }}</div>
+              <div class="detail-value">{{ selectedRecord.merchant?.merchant_name || '-' }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
-              <div class="detail-label">Submit Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Account ID</div>
-              <div class="detail-value">{{ selectedRecord.accountId }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Currency</div>
-              <div class="detail-value">
-                <a-tag color="green">
-                  <a-icon type="dollar" />
-                  {{ selectedRecord.currency }}
-                </a-tag>
-              </div>
+              <div class="detail-label">Fee Type</div>
+              <div class="detail-value">{{ selectedRecord.fee_type_text || '-' }}</div>
             </div>
           </a-col>
 
@@ -233,14 +220,20 @@
           <template v-if="viewMode === 'digital'">
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Channel</div>
-                <div class="detail-value">{{ selectedRecord.channel }}</div>
+                <div class="detail-label">Crypto Currency ID</div>
+                <div class="detail-value">{{ selectedRecord.crypto_currency_id || '-' }}</div>
               </div>
             </a-col>
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Address</div>
-                <div class="detail-value">{{ selectedRecord.address }}</div>
+                <div class="detail-label">Chain Name</div>
+                <div class="detail-value">{{ selectedRecord.crypto_currency?.chain_name || '-' }}</div>
+              </div>
+            </a-col>
+            <a-col :span="12">
+              <div class="detail-item">
+                <div class="detail-label">Currency Symbol</div>
+                <div class="detail-value">{{ selectedRecord.crypto_currency?.symbol || '-' }}</div>
               </div>
             </a-col>
           </template>
@@ -274,42 +267,46 @@
 
           <a-col :span="12">
             <div class="detail-item">
+              <div class="detail-label">Currency</div>
+              <div class="detail-value">
+                <a-tag color="green">
+                  <a-icon type="dollar" />
+                  {{ viewMode === 'digital' ? selectedRecord.crypto_currency?.name : selectedRecord.currency }}
+                </a-tag>
+              </div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
               <div class="detail-label">Rate</div>
-              <div class="detail-value">{{ selectedRecord.rate }}</div>
-            </div>
-          </a-col>
-          <!-- 只有Fiat Currency模式才显示Transaction Limit -->
-          <a-col :span="12" v-if="viewMode === 'fiat'">
-            <div class="detail-item">
-              <div class="detail-label">Transaction Limit</div>
-              <div class="detail-value">{{ selectedRecord.transactionLimit }}</div>
+              <div class="detail-value">{{ (parseFloat(selectedRecord.rate_fee || 0) * 100) + '%' }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
-              <div class="detail-label">Operator ID</div>
-              <div class="detail-value">{{ selectedRecord.operatorId || 'OP-101' }}</div>
+              <div class="detail-label">Min Amount</div>
+              <div class="detail-value">{{ selectedRecord.min_amount || '0.00000000' }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
-              <div class="detail-label">Operator Name</div>
-              <div class="detail-value">{{ selectedRecord.operatorName || 'John Smith' }}</div>
+              <div class="detail-label">Max Amount</div>
+              <div class="detail-value">{{ selectedRecord.max_amount || '0.00000000' }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
-              <div class="detail-label">Operate Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
+              <div class="detail-label">Updated Time</div>
+              <div class="detail-value">{{ formatTime(selectedRecord.updated_at) }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
               <div class="detail-label">Status</div>
               <div class="detail-value">
-                <a-tag :color="getStatusColor(selectedRecord.status)">
-                  <a-icon :type="getStatusIcon(selectedRecord.status)" />
-                  {{ selectedRecord.status }}
+                <a-tag :color="getStatusColor(selectedRecord.statusText)">
+                  <a-icon :type="getStatusIcon(selectedRecord.statusText)" />
+                  {{ selectedRecord.statusText }}
                 </a-tag>
               </div>
             </div>
@@ -317,7 +314,7 @@
         </a-row>
 
         <!-- Review抽屉底部按钮 - 只有Pending状态才显示 -->
-        <div v-if="selectedRecord.status === 'Pending'" class="drawer-footer">
+        <div v-if="selectedRecord.statusText === 'Pending'" class="drawer-footer">
           <a-button
             @click="handleReject"
             style="margin-right: 8px"
@@ -344,41 +341,37 @@
       @close="closeEditDrawer"
       :bodyStyle="{ padding: '24px', paddingBottom: '80px' }"
     >
-      <div v-if="selectedRecord">
+      <div v-if="detailLoading" style="text-align: center; padding: 60px 0;">
+        <a-spin size="large" />
+        <div style="margin-top: 16px; color: #666;">
+          Loading details...
+        </div>
+      </div>
+
+      <div v-else-if="selectedRecord">
         <a-row :gutter="[16, 24]">
           <a-col :span="12">
             <div class="detail-item">
+              <div class="detail-label">Fee ID</div>
+              <div class="detail-value">{{ selectedRecord.id }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
               <div class="detail-label">Client ID</div>
-              <div class="detail-value">{{ selectedRecord.clientId }}</div>
+              <div class="detail-value">{{ selectedRecord.merchant?.merchant_no || '-' }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
               <div class="detail-label">Client Name</div>
-              <div class="detail-value">{{ selectedRecord.clientName }}</div>
+              <div class="detail-value">{{ selectedRecord.merchant?.merchant_name || '-' }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
-              <div class="detail-label">Submit Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Account ID</div>
-              <div class="detail-value">{{ selectedRecord.accountId }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Currency</div>
-              <div class="detail-value">
-                <a-tag color="green">
-                  <a-icon type="dollar" />
-                  {{ selectedRecord.currency }}
-                </a-tag>
-              </div>
+              <div class="detail-label">Fee Type</div>
+              <div class="detail-value">{{ selectedRecord.fee_type_text || '-' }}</div>
             </div>
           </a-col>
 
@@ -386,19 +379,25 @@
           <template v-if="viewMode === 'digital'">
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Channel</div>
-                <div class="detail-value">{{ selectedRecord.channel }}</div>
+                <div class="detail-label">Crypto Currency ID</div>
+                <div class="detail-value">{{ selectedRecord.crypto_currency_id || '-' }}</div>
               </div>
             </a-col>
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Address</div>
-                <div class="detail-value">{{ selectedRecord.address }}</div>
+                <div class="detail-label">Chain Name</div>
+                <div class="detail-value">{{ selectedRecord.crypto_currency?.chain_name || '-' }}</div>
+              </div>
+            </a-col>
+            <a-col :span="12">
+              <div class="detail-item">
+                <div class="detail-label">Currency Symbol</div>
+                <div class="detail-value">{{ selectedRecord.crypto_currency?.symbol || '-' }}</div>
               </div>
             </a-col>
           </template>
 
-          <!-- Fiat Currency 特有字段 -->
+          <!-- Fiat Currency 特有字段 (保持原样，因为没有对应的API) -->
           <template v-if="viewMode === 'fiat'">
             <a-col :span="12">
               <div class="detail-item">
@@ -423,40 +422,48 @@
                 <div class="detail-value">{{ selectedRecord.account }}</div>
               </div>
             </a-col>
-            <a-col :span="12">
-              <div class="detail-item">
-                <div class="detail-label">Transaction Limit</div>
-                <div class="detail-value">{{ editableRecord.transactionLimit }}</div>
-              </div>
-            </a-col>
           </template>
+
           <a-col :span="12">
             <div class="detail-item">
-              <div class="detail-label">Operator ID</div>
-              <div class="detail-value">{{ selectedRecord.operatorId || 'OP-101' }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Operator Name</div>
-              <div class="detail-value">{{ selectedRecord.operatorName || 'John Smith' }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Operate Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Status</div>
+              <div class="detail-label">Currency</div>
               <div class="detail-value">
                 <a-tag color="green">
-                  <a-icon type="check-circle" />
-                  {{ selectedRecord.status }}
+                  <a-icon type="dollar" />
+                  {{ viewMode === 'digital' ? selectedRecord.crypto_currency?.name : selectedRecord.currency }}
                 </a-tag>
               </div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Min Amount</div>
+              <div class="detail-value">
+                <a-input
+                  v-model="editableRecord.min_amount"
+                  class="amount-input"
+                  size="default"
+                />
+              </div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Max Amount</div>
+              <div class="detail-value">
+                <a-input
+                  v-model="editableRecord.max_amount"
+                  class="amount-input"
+                  size="default"
+                  placeholder="0 means unlimited"
+                />
+              </div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Updated Time</div>
+              <div class="detail-value">{{ formatTime(selectedRecord.updated_at) }}</div>
             </div>
           </a-col>
           <a-col :span="24">
@@ -465,7 +472,7 @@
               <div class="detail-value">
                 <div class="rate-input-container">
                   <a-input
-                    v-model="editableRecord.rate"
+                    v-model="editableRecord.rate_fee"
                     class="rate-input"
                     size="large"
                   />
@@ -480,15 +487,15 @@
               <div class="detail-value">
                 <div class="status-select-container">
                   <div class="status-display">
-                    <span class="status-dot" :class="editableRecord.status.toLowerCase()"></span>
-                    <span class="status-text">{{ editableRecord.status }}</span>
+                    <span class="status-dot" :class="editableRecord.status === 1 ? 'actived' : 'disable'"></span>
+                    <span class="status-text">{{ editableRecord.status === 1 ? 'Actived' : 'Disable' }}</span>
                     <a-button
                       type="link"
                       size="small"
                       @click="toggleStatus"
                       class="change-status-btn-inner"
                     >
-                      Change Statu
+                      Change Status
                     </a-button>
                   </div>
                 </div>
@@ -509,6 +516,7 @@
           <a-button
             type="primary"
             @click="handleConfirm"
+            :loading="updateLoading"
             size="large"
           >
             Confirm
@@ -520,19 +528,26 @@
 </template>
 
 <script>
+import { request } from '@/api/_service'
+import _ from 'lodash'
+
 export default {
   name: 'WithdrawalManagement',
   data () {
     return {
+      // 加载状态
+      loading: false,
+      updateLoading: false,
+      detailLoading: false,
+
       // 视图模式
       viewMode: 'digital',
 
       // 过滤条件
       filters: {
-        clientId: '',
-        clientName: '',
-        channel: '',
-        currency: '',
+        merchant_no: '',
+        merchant_name: '',
+        currency_name: '',
         status: '',
         entityCountry: '',
         accountType: ''
@@ -543,92 +558,27 @@ export default {
       editDrawerVisible: false,
       selectedRecord: null,
       editableRecord: {
-        rate: '0.5',
-        status: 'Actived',
-        transactionLimit: '1,300,000'
+        rate_fee: '0.5',
+        status: 1,
+        min_amount: '0',
+        max_amount: '0'
       },
 
       // 分页配置
       pagination: {
         current: 1,
         pageSize: 10,
-        total: 97,
+        total: 0,
         showSizeChanger: true,
         showQuickJumper: true,
         showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
         pageSizeOptions: ['10', '20', '50', '100']
       },
 
-      // 数字货币数据
-      digitalCurrencyData: [
-        {
-          key: 'digital-1',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDT',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          transactionLimit: '1,300,000',
-          status: 'Pending'
-        },
-        {
-          key: 'digital-2',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDT',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          transactionLimit: '1,300,000',
-          status: 'Pending'
-        },
-        {
-          key: 'digital-3',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDC',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          transactionLimit: '1,300,000',
-          status: 'Pending'
-        },
-        {
-          key: 'digital-4',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDC',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          transactionLimit: '1,300,000',
-          status: 'Actived'
-        },
-        {
-          key: 'digital-5',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'ERC20',
-          currency: 'USDT',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          transactionLimit: '1,300,000',
-          status: 'Actived'
-        }
-      ],
+      // 数据列表
+      dataList: [],
 
-      // 法币数据
+      // 法币数据 (保持静态数据，因为没有对应的API)
       fiatCurrencyData: [
         {
           key: 'fiat-1',
@@ -642,7 +592,8 @@ export default {
           operateTime: '2025/02/10 12:20:32',
           rate: '0.5%',
           transactionLimit: '1,300,000',
-          status: 'Pending'
+          status: 'Pending',
+          statusText: 'Pending'
         },
         {
           key: 'fiat-2',
@@ -656,7 +607,8 @@ export default {
           operateTime: '2025/02/10 12:20:32',
           rate: '0.5%',
           transactionLimit: '1,300,000',
-          status: 'Pending'
+          status: 'Pending',
+          statusText: 'Pending'
         },
         {
           key: 'fiat-3',
@@ -670,7 +622,8 @@ export default {
           operateTime: '2025/02/10 12:20:32',
           rate: '0.5%',
           transactionLimit: '1,300,000',
-          status: 'Pending'
+          status: 'Pending',
+          statusText: 'Pending'
         },
         {
           key: 'fiat-4',
@@ -684,7 +637,8 @@ export default {
           operateTime: '2025/02/10 12:20:32',
           rate: '0.5%',
           transactionLimit: '1,300,000',
-          status: 'Actived'
+          status: 'Actived',
+          statusText: 'Actived'
         },
         {
           key: 'fiat-5',
@@ -698,46 +652,35 @@ export default {
           operateTime: '2025/02/10 12:20:32',
           rate: '0.5%',
           transactionLimit: '1,300,000',
-          status: 'Actived'
+          status: 'Actived',
+          statusText: 'Actived'
         }
       ]
     }
   },
 
   computed: {
-    // 当前数据源
-    currentTableData () {
-      return this.viewMode === 'digital' ? this.digitalCurrencyData : this.fiatCurrencyData
-    },
-
     // 当前表格列配置
     currentColumns () {
       if (this.viewMode === 'digital') {
         return [
           {
-            title: 'Account ID',
-            dataIndex: 'accountId',
-            key: 'accountId',
-            width: 120,
-            fixed: 'left'
-          },
-          {
             title: 'Client ID',
             dataIndex: 'clientId',
             key: 'clientId',
-            width: 100
+            width: 150
           },
           {
             title: 'Client Name',
             dataIndex: 'clientName',
             key: 'clientName',
-            width: 120
+            width: 150
           },
           {
-            title: 'Channel',
-            dataIndex: 'channel',
-            key: 'channel',
-            width: 100
+            title: 'Chain Name',
+            dataIndex: 'chainName',
+            key: 'chainName',
+            width: 120
           },
           {
             title: 'Currency',
@@ -746,11 +689,17 @@ export default {
             width: 100
           },
           {
-            title: 'Address',
-            dataIndex: 'address',
-            key: 'address',
-            width: 200,
-            scopedSlots: { customRender: 'address' }
+            title: 'Fee Type',
+            dataIndex: 'feeType',
+            key: 'feeType',
+            width: 100
+          },
+          {
+            title: 'Rate',
+            dataIndex: 'rate',
+            key: 'rate',
+            width: 100,
+            scopedSlots: { customRender: 'rate' }
           },
           {
             title: 'Status',
@@ -760,16 +709,10 @@ export default {
             scopedSlots: { customRender: 'status' }
           },
           {
-            title: 'Rate',
-            dataIndex: 'rate',
-            key: 'rate',
-            width: 80
-          },
-          {
-            title: 'Transaction Limit',
-            dataIndex: 'transactionLimit',
-            key: 'transactionLimit',
-            width: 120
+            title: 'Updated Time',
+            dataIndex: 'updatedTime',
+            key: 'updatedTime',
+            width: 160
           },
           {
             title: 'Action',
@@ -855,64 +798,147 @@ export default {
       }
     },
 
-    // 过滤后的数据
-    filteredData () {
-      let data = [...this.currentTableData]
-
-      if (this.filters.clientId) {
-        data = data.filter(item =>
-          item.clientId.toLowerCase().includes(this.filters.clientId.toLowerCase())
-        )
-      }
-
-      if (this.filters.clientName) {
-        data = data.filter(item =>
-          item.clientName.toLowerCase().includes(this.filters.clientName.toLowerCase())
-        )
-      }
-
-      if (this.viewMode === 'digital') {
-        if (this.filters.channel) {
-          data = data.filter(item => item.channel === this.filters.channel)
-        }
-        if (this.filters.currency) {
-          data = data.filter(item => item.currency === this.filters.currency)
-        }
-      } else {
-        if (this.filters.entityCountry) {
-          data = data.filter(item => item.entityCountry === this.filters.entityCountry)
-        }
-        if (this.filters.accountType) {
-          data = data.filter(item => item.accountType === this.filters.accountType)
-        }
-      }
-
-      if (this.filters.status) {
-        data = data.filter(item => item.status === this.filters.status)
-      }
-
-      return data
+    // 当前数据源 (数字货币用API数据，法币用静态数据)
+    currentTableData () {
+      return this.viewMode === 'digital' ? this.dataList : this.fiatCurrencyData
     }
   },
 
+  created () {
+    this.fetchData()
+  },
+
   methods: {
-    // 搜索
-    handleSearch () {
-      console.log('Search filters:', this.filters)
-      this.$message.success('Search completed')
+    // 防抖处理的搜索方法
+    handleSearch: _.debounce(function () {
+      this.pagination.current = 1
+      this.fetchData()
+    }, 300),
+
+    // API调用方法 (只对数字货币生效)
+    async fetchData () {
+      if (this.viewMode === 'fiat') {
+        // 法币模式不调用API，直接返回
+        return
+      }
+
+      this.loading = true
+      try {
+        const params = this.buildRequestParams()
+        const response = await request({
+          url: '/admin/merchant/expend/v2/digital/list',
+          method: 'GET',
+          params
+        })
+
+        if (response.code === 200) {
+          this.dataList = this.mapApiDataToTableData(response.data.list || [])
+          this.pagination.total = response.data.total || 0
+          this.pagination.current = response.data.page || 1
+
+          console.log('数据加载成功:', this.dataList.length, '条记录')
+        } else {
+          this.$message.error(response.message || '获取数据失败')
+          this.dataList = []
+          this.pagination.total = 0
+        }
+      } catch (error) {
+        console.error('API调用失败:', error)
+        this.$message.error('网络错误，请稍后重试')
+        this.dataList = []
+        this.pagination.total = 0
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // 构建请求参数
+    buildRequestParams () {
+      const params = {
+        page: this.pagination.current,
+        limit: this.pagination.pageSize
+      }
+
+      if (this.filters.merchant_no?.trim()) {
+        params.merchant_no = this.filters.merchant_no.trim()
+      }
+
+      if (this.filters.merchant_name?.trim()) {
+        params.merchant_name = this.filters.merchant_name.trim()
+      }
+
+      if (this.filters.currency_name) {
+        params.currency_name = this.filters.currency_name
+      }
+
+      if (this.filters.status) {
+        params.status = this.filters.status
+      }
+
+      return params
+    },
+
+    // 将API数据映射为表格数据格式
+    mapApiDataToTableData (apiList) {
+      return apiList.map(item => ({
+        ...item,
+        key: item.id,
+        clientId: item.merchant?.merchant_no || '-',
+        clientName: item.merchant?.merchant_name || '-',
+        chainName: item.crypto_currency?.chain_name || '-',
+        currency: item.crypto_currency?.name || '-',
+        feeType: item.fee_type_text || '-',
+        statusText: this.mapApiStatusToText(item.status),
+        updatedTime: this.formatTime(item.updated_at)
+      }))
+    },
+
+    // 将API状态数字转换为文本
+    mapApiStatusToText (status) {
+      return status === 1 ? 'Actived' : 'Disable'
+    },
+
+    // 格式化时间
+    formatTime (timeString) {
+      if (!timeString) return '-'
+
+      try {
+        const date = new Date(timeString)
+        if (isNaN(date.getTime())) return timeString
+
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        const seconds = String(date.getSeconds()).padStart(2, '0')
+
+        return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
+      } catch (error) {
+        console.error('时间格式化失败:', error)
+        return timeString
+      }
+    },
+
+    // 表格分页变更
+    handleTableChange (pagination) {
+      this.pagination.current = pagination.current
+      this.pagination.pageSize = pagination.pageSize
+      this.fetchData()
     },
 
     // 重置
     handleReset () {
       this.filters = {
-        clientId: '',
-        clientName: '',
-        channel: '',
-        currency: '',
+        merchant_no: '',
+        merchant_name: '',
+        currency_name: '',
         status: '',
         entityCountry: '',
         accountType: ''
       }
+      this.pagination.current = 1
+      this.fetchData()
       this.$message.info('Filters reset')
     },
 
@@ -923,16 +949,18 @@ export default {
       this.reviewDrawerVisible = false
       this.editDrawerVisible = false
       this.selectedRecord = null
+      this.detailLoading = false
       // 重置过滤条件
       this.filters = {
-        clientId: '',
-        clientName: '',
-        channel: '',
-        currency: '',
+        merchant_no: '',
+        merchant_name: '',
+        currency_name: '',
         status: '',
         entityCountry: '',
         accountType: ''
       }
+      this.pagination.current = 1
+      this.fetchData()
       this.$message.info(`Switched to ${mode} currency view`)
     },
 
@@ -955,14 +983,44 @@ export default {
     },
 
     // Edit按钮点击
-    handleEdit (record) {
-      this.selectedRecord = { ...record }
-      this.editableRecord = {
-        rate: record.rate ? record.rate.replace('%', '') : '0.5',
-        status: record.status,
-        transactionLimit: record.transactionLimit
-      }
+    async handleEdit (record) {
+      this.selectedRecord = null
       this.editDrawerVisible = true
+      this.detailLoading = true
+
+      try {
+        if (this.viewMode === 'digital') {
+          // 数字货币模式直接使用record数据，无需调用详情接口
+          setTimeout(() => {
+            this.selectedRecord = { ...record }
+            // API返回rate_fee是小数(0.01)，转换为百分比数值(1)供编辑使用
+            this.editableRecord = {
+              rate_fee: parseFloat(record.rate_fee || 0) * 100, // 0.01 -> 1
+              status: record.status,
+              min_amount: record.min_amount || '0',
+              max_amount: record.max_amount || '0'
+            }
+            this.detailLoading = false
+            console.log('编辑数据准备完成:', this.selectedRecord)
+          }, 300) // 模拟加载时间
+        } else {
+          // 法币模式直接使用传入的record
+          setTimeout(() => {
+            this.selectedRecord = { ...record }
+            this.editableRecord = {
+              rate_fee: record.rate ? parseFloat(record.rate.replace('%', '')) : 0.5,
+              status: record.status === 'Actived' ? 1 : -1,
+              min_amount: '0',
+              max_amount: record.transactionLimit || '0'
+            }
+            this.detailLoading = false
+          }, 300)
+        }
+      } catch (error) {
+        console.error('准备编辑数据失败:', error)
+        this.$message.error('Failed to load edit data')
+        this.detailLoading = false
+      }
     },
 
     // 关闭Review抽屉
@@ -975,22 +1033,31 @@ export default {
     closeEditDrawer () {
       this.editDrawerVisible = false
       this.selectedRecord = null
+      this.detailLoading = false
     },
 
     // 切换状态
     toggleStatus () {
-      this.editableRecord.status = this.editableRecord.status === 'Actived' ? 'Disable' : 'Actived'
+      this.editableRecord.status = this.editableRecord.status === 1 ? -1 : 1
     },
 
     // 拒绝操作
     handleReject () {
       if (this.selectedRecord) {
         // 更新对应数据源的状态
-        const dataSource = this.viewMode === 'digital' ? this.digitalCurrencyData : this.fiatCurrencyData
-        const index = dataSource.findIndex(item => item.key === this.selectedRecord.key)
-        if (index > -1) {
-          dataSource[index].status = 'Disable'
-          this.selectedRecord.status = 'Disable'
+        if (this.viewMode === 'digital') {
+          const index = this.dataList.findIndex(item => item.key === this.selectedRecord.id)
+          if (index > -1) {
+            this.dataList[index].statusText = 'Disable'
+            this.selectedRecord.statusText = 'Disable'
+          }
+        } else {
+          const index = this.fiatCurrencyData.findIndex(item => item.key === this.selectedRecord.key)
+          if (index > -1) {
+            this.fiatCurrencyData[index].status = 'Disable'
+            this.fiatCurrencyData[index].statusText = 'Disable'
+            this.selectedRecord.statusText = 'Disable'
+          }
         }
         this.$message.success('Request rejected')
         this.closeReviewDrawer()
@@ -1001,11 +1068,19 @@ export default {
     handleAgree () {
       if (this.selectedRecord) {
         // 更新对应数据源的状态
-        const dataSource = this.viewMode === 'digital' ? this.digitalCurrencyData : this.fiatCurrencyData
-        const index = dataSource.findIndex(item => item.key === this.selectedRecord.key)
-        if (index > -1) {
-          dataSource[index].status = 'Actived'
-          this.selectedRecord.status = 'Actived'
+        if (this.viewMode === 'digital') {
+          const index = this.dataList.findIndex(item => item.key === this.selectedRecord.id)
+          if (index > -1) {
+            this.dataList[index].statusText = 'Actived'
+            this.selectedRecord.statusText = 'Actived'
+          }
+        } else {
+          const index = this.fiatCurrencyData.findIndex(item => item.key === this.selectedRecord.key)
+          if (index > -1) {
+            this.fiatCurrencyData[index].status = 'Actived'
+            this.fiatCurrencyData[index].statusText = 'Actived'
+            this.selectedRecord.statusText = 'Actived'
+          }
         }
         this.$message.success('Request approved')
         this.closeReviewDrawer()
@@ -1018,18 +1093,96 @@ export default {
     },
 
     // 确认编辑操作
-    handleConfirm () {
-      if (this.selectedRecord) {
-        // 更新对应数据源的数据
-        const dataSource = this.viewMode === 'digital' ? this.digitalCurrencyData : this.fiatCurrencyData
-        const index = dataSource.findIndex(item => item.key === this.selectedRecord.key)
-        if (index > -1) {
-          dataSource[index].rate = this.editableRecord.rate + '%'
-          dataSource[index].status = this.editableRecord.status
-          dataSource[index].transactionLimit = this.editableRecord.transactionLimit
+    async handleConfirm () {
+      if (!this.selectedRecord) return
+
+      // 验证输入
+      if (this.editableRecord.rate_fee === '' || isNaN(parseFloat(this.editableRecord.rate_fee))) {
+        this.$message.error('Please enter a valid rate')
+        return
+      }
+
+      if (this.editableRecord.min_amount === '' || isNaN(parseFloat(this.editableRecord.min_amount))) {
+        this.$message.error('Please enter a valid min amount')
+        return
+      }
+
+      if (this.editableRecord.max_amount === '' || isNaN(parseFloat(this.editableRecord.max_amount))) {
+        this.$message.error('Please enter a valid max amount')
+        return
+      }
+
+      const rateValue = parseFloat(this.editableRecord.rate_fee)
+      const minAmount = parseFloat(this.editableRecord.min_amount)
+      const maxAmount = parseFloat(this.editableRecord.max_amount)
+
+      // 验证费率范围
+      if (rateValue < 0 || rateValue > 100) {
+        this.$message.error('Rate must be between 0 and 100')
+        return
+      }
+
+      // 验证金额范围
+      if (minAmount < 0) {
+        this.$message.error('Min amount cannot be negative')
+        return
+      }
+
+      if (maxAmount < 0) {
+        this.$message.error('Max amount cannot be negative')
+        return
+      }
+
+      if (maxAmount > 0 && minAmount > maxAmount) {
+        this.$message.error('Min amount cannot be greater than max amount')
+        return
+      }
+
+      this.updateLoading = true
+      try {
+        if (this.viewMode === 'digital') {
+          // 数字货币更新API
+          const updateData = {
+            id: this.selectedRecord.id,
+            min_amount: this.editableRecord.min_amount.toString(),
+            max_amount: this.editableRecord.max_amount.toString(),
+            rate: (rateValue).toString(), // 将百分比转换为小数字符串: 0.5 -> "0.005"
+            status: this.editableRecord.status.toString()
+          }
+
+          console.log('提交更新数据:', updateData)
+
+          const response = await request({
+            url: '/admin/merchant/expend/v2/digital/update',
+            method: 'POST',
+            data: updateData
+          })
+
+          if (response.code === 200) {
+            this.$message.success('Changes saved successfully')
+            this.closeEditDrawer()
+            // 重新获取列表数据
+            await this.fetchData()
+          } else {
+            this.$message.error(response.message || 'Update failed')
+          }
+        } else {
+          // 法币模式直接更新本地数据
+          const index = this.fiatCurrencyData.findIndex(item => item.key === this.selectedRecord.key)
+          if (index > -1) {
+            this.fiatCurrencyData[index].rate = this.editableRecord.rate_fee + '%'
+            this.fiatCurrencyData[index].status = this.editableRecord.status === 1 ? 'Actived' : 'Disable'
+            this.fiatCurrencyData[index].statusText = this.editableRecord.status === 1 ? 'Actived' : 'Disable'
+            this.fiatCurrencyData[index].transactionLimit = this.editableRecord.max_amount
+          }
+          this.$message.success('Changes saved successfully')
+          this.closeEditDrawer()
         }
-        this.$message.success('Changes saved successfully')
-        this.closeEditDrawer()
+      } catch (error) {
+        console.error('更新失败:', error)
+        this.$message.error('Network error, please try again')
+      } finally {
+        this.updateLoading = false
       }
     },
 
@@ -1194,6 +1347,16 @@ export default {
       color: #8c8c8c;
       font-size: 14px;
       pointer-events: none;
+    }
+  }
+
+  .amount-input {
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid #d9d9d9;
+
+    &:hover, &:focus {
+      border-color: #40a9ff;
     }
   }
 

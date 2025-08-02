@@ -4,7 +4,7 @@ English | [简体中文](./README.zh-CN.md)
 <div align="center">
 An out-of-box UI solution for enterprise applications as a Vue boilerplate. based on  <a href="https://vuecomponent.github.io/ant-design-vue/docs/vue/introduce-cn/" target="_blank">Ant Design of Vue</a>
 </div>
-我想的项目是以Ant Design Vue Pro为模版做的，并且语言是vue2,我想让你根据设计图，给我做页面可以嘛。
+我的项目是以Ant Design Vue Pro为模版做的，并且语言是vue2,我想让你根据设计图，给我做页面可以嘛。
 <div align="center">
 
 [![License](https://img.shields.io/npm/l/package.json.svg?style=flat)](https://github.com/vueComponent/ant-design-vue-pro/blob/master/LICENSE)

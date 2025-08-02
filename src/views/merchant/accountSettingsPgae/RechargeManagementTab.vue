@@ -5,21 +5,23 @@
       <a-row :gutter="16">
         <a-col :span="4">
           <a-input
-            v-model="filters.clientId"
+            v-model="filters.merchant_no"
             placeholder="Client ID"
             size="default"
+            allow-clear
           />
         </a-col>
         <a-col :span="4">
           <a-input
-            v-model="filters.clientName"
+            v-model="filters.merchant_name"
             placeholder="Client Name"
             size="default"
+            allow-clear
           />
         </a-col>
         <a-col :span="4">
           <a-select
-            v-model="filters.entityCountry"
+            v-model="filters.country_code"
             placeholder="Entity Country/Region"
             size="default"
             style="width: 100%"
@@ -27,39 +29,13 @@
             v-if="viewMode === 'fiat'"
           >
             <a-select-option value="">All</a-select-option>
-            <a-select-option value="HongKong">HongKong</a-select-option>
-            <a-select-option value="Brazil">Brazil</a-select-option>
-            <a-select-option value="Colombia">Colombia</a-select-option>
-            <a-select-option value="Mexico">Mexico</a-select-option>
+            <a-select-option value="HK">HongKong</a-select-option>
+            <a-select-option value="BR">Brazil</a-select-option>
+            <a-select-option value="CO">Colombia</a-select-option>
+            <a-select-option value="MX">Mexico</a-select-option>
           </a-select>
           <a-select
-            v-model="filters.channel"
-            placeholder="Channel"
-            size="default"
-            style="width: 100%"
-            allowClear
-            v-if="viewMode === 'digital'"
-          >
-            <a-select-option value="">All</a-select-option>
-            <a-select-option value="TRC20">TRC20</a-select-option>
-            <a-select-option value="ERC20">ERC20</a-select-option>
-          </a-select>
-        </a-col>
-        <a-col :span="4">
-          <a-select
-            v-model="filters.accountType"
-            placeholder="Account Type"
-            size="default"
-            style="width: 100%"
-            allowClear
-            v-if="viewMode === 'fiat'"
-          >
-            <a-select-option value="">All</a-select-option>
-            <a-select-option value="virtual account">virtual account</a-select-option>
-            <a-select-option value="institution account">institution account</a-select-option>
-          </a-select>
-          <a-select
-            v-model="filters.currency"
+            v-model="filters.currency_name"
             placeholder="Currency"
             size="default"
             style="width: 100%"
@@ -69,6 +45,8 @@
             <a-select-option value="">All</a-select-option>
             <a-select-option value="USDT">USDT</a-select-option>
             <a-select-option value="USDC">USDC</a-select-option>
+            <a-select-option value="BTC">BTC</a-select-option>
+            <a-select-option value="ETH">ETH</a-select-option>
           </a-select>
         </a-col>
         <a-col :span="4">
@@ -80,12 +58,12 @@
             allowClear
           >
             <a-select-option value="">All</a-select-option>
-            <a-select-option value="Actived">Actived</a-select-option>
-            <a-select-option value="Disable">Disable</a-select-option>
+            <a-select-option value="1">Actived</a-select-option>
+            <a-select-option value="-1">Disable</a-select-option>
           </a-select>
         </a-col>
-        <a-col :span="4">
-          <a-button type="primary" @click="handleSearch" style="margin-right: 8px">
+        <a-col :span="6">
+          <a-button type="primary" @click="handleSearch" :loading="loading" style="margin-right: 8px">
             Search
           </a-button>
           <a-button @click="handleReset">
@@ -117,33 +95,27 @@
     <div class="table-section">
       <a-table
         :columns="currentColumns"
-        :dataSource="filteredData"
+        :dataSource="dataList"
         :pagination="pagination"
         :scroll="{ x: 1400 }"
+        :loading="loading"
         rowKey="key"
         size="middle"
+        @change="handleTableChange"
       >
-        <!-- 实体国家/地区列自定义渲染 -->
-        <template slot="entityCountry" slot-scope="text, record">
-          <div class="country-cell">
-            <img :src="getCountryFlag(text)" class="country-flag" :alt="text" />
-            <span>{{ text }}</span>
-          </div>
+        <!-- Rate列自定义渲染 -->
+        <template slot="rate" slot-scope="text, record">
+          {{ (parseFloat(record.rate_fee || 0) * 100) + '%' }}
         </template>
 
-        <!-- 地址列自定义渲染 -->
-        <template slot="address" slot-scope="text, record">
-          <div class="address-cell">
-            <span class="address-text">{{ text }}</span>
-            <a-button
-              type="link"
-              size="small"
-              @click="copyAddress(text)"
-              class="copy-btn"
-            >
-              <a-icon type="copy" />
-            </a-button>
-          </div>
+        <!-- 状态列自定义渲染 -->
+        <template slot="status" slot-scope="text, record">
+          <a-tag
+            :color="getStatusColor(record.statusText)"
+          >
+            <a-icon :type="getStatusIcon(record.statusText)" />
+            {{ record.statusText }}
+          </a-tag>
         </template>
 
         <!-- 操作列自定义渲染 -->
@@ -168,41 +140,39 @@
       @close="closeDetailDrawer"
       :bodyStyle="{ padding: '24px', paddingBottom: '80px' }"
     >
-      <div v-if="selectedRecord">
+      <!-- 加载状态 -->
+      <div v-if="detailLoading" style="text-align: center; padding: 60px 0;">
+        <a-spin size="large" />
+        <div style="margin-top: 16px; color: #666;">
+          Loading details...
+        </div>
+      </div>
+
+      <!-- 详情内容 -->
+      <div v-else-if="selectedRecord">
         <a-row :gutter="[16, 24]">
           <a-col :span="12">
             <div class="detail-item">
+              <div class="detail-label">Fee ID</div>
+              <div class="detail-value">{{ selectedRecord.id }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
               <div class="detail-label">Client ID</div>
-              <div class="detail-value">{{ selectedRecord.clientId }}</div>
+              <div class="detail-value">{{ selectedRecord.merchant?.merchant_no || '-' }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
               <div class="detail-label">Client Name</div>
-              <div class="detail-value">{{ selectedRecord.clientName }}</div>
+              <div class="detail-value">{{ selectedRecord.merchant?.merchant_name || '-' }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
-              <div class="detail-label">Submit Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Account ID</div>
-              <div class="detail-value">{{ selectedRecord.accountId }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Currency</div>
-              <div class="detail-value">
-                <a-tag color="green">
-                  <a-icon type="dollar" />
-                  {{ selectedRecord.currency }}
-                </a-tag>
-              </div>
+              <div class="detail-label">Fee Type</div>
+              <div class="detail-value">{{ selectedRecord.fee_type_text || '-' }}</div>
             </div>
           </a-col>
 
@@ -210,14 +180,26 @@
           <template v-if="viewMode === 'digital'">
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Channel</div>
-                <div class="detail-value">{{ selectedRecord.channel }}</div>
+                <div class="detail-label">Gateway ID</div>
+                <div class="detail-value">{{ selectedRecord.gateway_id || '-' }}</div>
               </div>
             </a-col>
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Address</div>
-                <div class="detail-value">{{ selectedRecord.address }}</div>
+                <div class="detail-label">Chain Name</div>
+                <div class="detail-value">{{ selectedRecord.crypto_currency?.chain_name || '-' }}</div>
+              </div>
+            </a-col>
+            <a-col :span="12">
+              <div class="detail-item">
+                <div class="detail-label">Currency Symbol</div>
+                <div class="detail-value">{{ selectedRecord.crypto_currency?.symbol || '-' }}</div>
+              </div>
+            </a-col>
+            <a-col :span="12">
+              <div class="detail-item">
+                <div class="detail-label">Crypto Currency ID</div>
+                <div class="detail-value">{{ selectedRecord.crypto_currency_id || '-' }}</div>
               </div>
             </a-col>
           </template>
@@ -226,56 +208,100 @@
           <template v-if="viewMode === 'fiat'">
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Entity Country/Region</div>
-                <div class="detail-value">
-                  <div class="country-cell">
-                    <img :src="getCountryFlag(selectedRecord.entityCountry)" class="country-flag" :alt="selectedRecord.entityCountry" />
-                    <span>{{ selectedRecord.entityCountry }}</span>
-                  </div>
-                </div>
+                <div class="detail-label">Country Code</div>
+                <div class="detail-value">{{ selectedRecord.merchant?.country_code || '-' }}</div>
               </div>
             </a-col>
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Account Type</div>
-                <div class="detail-value">{{ selectedRecord.accountType }}</div>
+                <div class="detail-label">Currency Code</div>
+                <div class="detail-value">{{ selectedRecord.fiat_currency?.code || '-' }}</div>
               </div>
             </a-col>
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Account</div>
-                <div class="detail-value">{{ selectedRecord.account }}</div>
+                <div class="detail-label">Currency Symbol</div>
+                <div class="detail-value">{{ selectedRecord.fiat_currency?.symbol || '-' }}</div>
+              </div>
+            </a-col>
+            <a-col :span="12">
+              <div class="detail-item">
+                <div class="detail-label">Fiat Currency ID</div>
+                <div class="detail-value">{{ selectedRecord.fiat_currency_id || '-' }}</div>
               </div>
             </a-col>
           </template>
 
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Operator ID</div>
-              <div class="detail-value">{{ selectedRecord.operatorId || 'OP-101' }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Operator Name</div>
-              <div class="detail-value">{{ selectedRecord.operatorName || 'John Smith' }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Operate Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Status</div>
+          <a-col :span="12 " style="max-height: 67px;">
+            <div class="detail-item" style="max-height: 67px;">
+              <div class="detail-label">Currency</div>
               <div class="detail-value">
                 <a-tag color="green">
-                  <a-icon type="check-circle" />
-                  {{ selectedRecord.status }}
+                  <a-icon type="dollar" />
+                  {{ viewMode === 'digital' ? selectedRecord.crypto_currency?.name : selectedRecord.fiat_currency?.name }}
                 </a-tag>
               </div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Fixed Fee</div>
+              <div class="detail-value">{{ selectedRecord.fixed_fee || '0.00000000' }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Min Fee</div>
+              <div class="detail-value">{{ selectedRecord.min_fee || '0.00000000' }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Max Fee</div>
+              <div class="detail-value">{{ selectedRecord.max_fee || '0.00000000' }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12" style="max-height: 67px;">
+            <div class="detail-item">
+              <div class="detail-label">Min Amount</div>
+              <div class="detail-value">
+                <a-input
+                  v-model="editableRecord.min_amount"
+                  class="amount-input"
+                  size="default"
+                />
+              </div>
+            </div>
+          </a-col>
+          <a-col :span="12" style="max-height: 67px;">
+            <div class="detail-item" style="max-height: 67px;">
+              <div class="detail-label">Max Amount</div>
+              <div class="detail-value">
+                <a-input
+                  v-model="editableRecord.max_amount"
+                  class="amount-input"
+                  size="default"
+                  placeholder="0 means unlimited"
+                />
+              </div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Created Time</div>
+              <div class="detail-value">{{ formatTime(selectedRecord.created_at) }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Updated Time</div>
+              <div class="detail-value">{{ formatTime(selectedRecord.updated_at) }}</div>
+            </div>
+          </a-col>
+          <a-col :span="24" v-if="selectedRecord.remarks">
+            <div class="detail-item">
+              <div class="detail-label">Remarks</div>
+              <div class="detail-value">{{ selectedRecord.remarks }}</div>
             </div>
           </a-col>
           <a-col :span="24">
@@ -284,7 +310,7 @@
               <div class="detail-value">
                 <div class="rate-input-container">
                   <a-input
-                    v-model="editableRecord.rate"
+                    v-model="editableRecord.rate_fee"
                     class="rate-input"
                     size="large"
                   />
@@ -295,12 +321,12 @@
           </a-col>
           <a-col :span="24">
             <div class="detail-item">
-              <div class="detail-label">Statu Type</div>
+              <div class="detail-label">Status Type</div>
               <div class="detail-value">
                 <div class="status-select-container">
                   <div class="status-display">
-                    <span class="status-dot" :class="editableRecord.status.toLowerCase()"></span>
-                    <span class="status-text">{{ editableRecord.status }}</span>
+                    <span class="status-dot" :class="editableRecord.status === 1 ? 'actived' : 'disable'"></span>
+                    <span class="status-text">{{ editableRecord.status === 1 ? 'Actived' : 'Disable' }}</span>
                     <a-button
                       type="link"
                       size="small"
@@ -328,6 +354,7 @@
           <a-button
             type="primary"
             @click="handleConfirm"
+            :loading="updateLoading"
             size="large"
           >
             Confirm
@@ -339,184 +366,57 @@
 </template>
 
 <script>
+import { request } from '@/api/_service'
+import _ from 'lodash'
+
 export default {
   name: 'RechargeManagement',
   data () {
     return {
+      // 加载状态
+      loading: false,
+      updateLoading: false,
+      detailLoading: false,
+
       // 视图模式
       viewMode: 'digital',
 
       // 过滤条件
       filters: {
-        clientId: '',
-        clientName: '',
-        channel: '',
-        currency: '',
+        merchant_no: '',
+        merchant_name: '',
+        currency_name: '',
         status: '',
-        entityCountry: '',
-        accountType: ''
+        country_code: ''
       },
 
       // 抽屉状态
       detailDrawerVisible: false,
       selectedRecord: null,
       editableRecord: {
-        rate: '0.5',
-        status: 'Actived'
+        rate_fee: '0.5',
+        status: 1,
+        min_amount: '0',
+        max_amount: '0'
       },
 
       // 分页配置
       pagination: {
         current: 1,
         pageSize: 10,
-        total: 97,
+        total: 0,
         showSizeChanger: true,
         showQuickJumper: true,
         showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
         pageSizeOptions: ['10', '20', '50', '100']
       },
 
-      // 数字货币数据
-      digitalCurrencyData: [
-        {
-          key: 'digital-1',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDT',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        },
-        {
-          key: 'digital-2',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDT',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        },
-        {
-          key: 'digital-3',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDC',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        },
-        {
-          key: 'digital-4',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDC',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        },
-        {
-          key: 'digital-5',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'ERC20',
-          currency: 'USDT',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        }
-      ],
-
-      // 法币数据
-      fiatCurrencyData: [
-        {
-          key: 'fiat-1',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'HongKong',
-          currency: 'HKD',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        },
-        {
-          key: 'fiat-2',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Colombia',
-          currency: 'COP',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        },
-        {
-          key: 'fiat-3',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Brazil',
-          currency: 'BRL',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        },
-        {
-          key: 'fiat-4',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Mexico',
-          currency: 'MXN',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        },
-        {
-          key: 'fiat-5',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'HongKong',
-          currency: 'HKD',
-          accountType: 'institution account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          rate: '0.5%',
-          status: 'Actived'
-        }
-      ]
+      // 数据列表
+      dataList: []
     }
   },
 
   computed: {
-    // 当前数据源
-    currentTableData () {
-      return this.viewMode === 'digital' ? this.digitalCurrencyData : this.fiatCurrencyData
-    },
-
     // 当前表格列配置
     currentColumns () {
       if (this.viewMode === 'digital') {
@@ -525,26 +425,19 @@ export default {
             title: 'Client ID',
             dataIndex: 'clientId',
             key: 'clientId',
-            width: 100,
-            fixed: 'left'
-          },
-          {
-            title: 'Account ID',
-            dataIndex: 'accountId',
-            key: 'accountId',
-            width: 120
+            width: 150
           },
           {
             title: 'Client Name',
             dataIndex: 'clientName',
             key: 'clientName',
-            width: 120
+            width: 150
           },
           {
-            title: 'Channel',
-            dataIndex: 'channel',
-            key: 'channel',
-            width: 100
+            title: 'Chain Name',
+            dataIndex: 'chainName',
+            key: 'chainName',
+            width: 120
           },
           {
             title: 'Currency',
@@ -553,23 +446,30 @@ export default {
             width: 100
           },
           {
-            title: 'Address',
-            dataIndex: 'address',
-            key: 'address',
-            width: 200,
-            scopedSlots: { customRender: 'address' }
-          },
-          {
-            title: 'Operate Time',
-            dataIndex: 'operateTime',
-            key: 'operateTime',
-            width: 160
+            title: 'Fee Type',
+            dataIndex: 'feeType',
+            key: 'feeType',
+            width: 100
           },
           {
             title: 'Rate',
             dataIndex: 'rate',
             key: 'rate',
-            width: 80
+            width: 100,
+            scopedSlots: { customRender: 'rate' }
+          },
+          {
+            title: 'Status',
+            dataIndex: 'status',
+            key: 'status',
+            width: 100,
+            scopedSlots: { customRender: 'status' }
+          },
+          {
+            title: 'Updated Time',
+            dataIndex: 'updatedTime',
+            key: 'updatedTime',
+            width: 160
           },
           {
             title: 'Action',
@@ -585,57 +485,51 @@ export default {
             title: 'Client ID',
             dataIndex: 'clientId',
             key: 'clientId',
-            width: 100,
-            fixed: 'left'
-          },
-          {
-            title: 'Account ID',
-            dataIndex: 'accountId',
-            key: 'accountId',
-            width: 120
+            width: 150
           },
           {
             title: 'Client Name',
             dataIndex: 'clientName',
             key: 'clientName',
-            width: 120
+            width: 150
           },
           {
-            title: 'Entity Country/Region',
-            dataIndex: 'entityCountry',
-            key: 'entityCountry',
-            width: 160,
-            scopedSlots: { customRender: 'entityCountry' }
+            title: 'Country Code',
+            dataIndex: 'countryCode',
+            key: 'countryCode',
+            width: 120
           },
           {
             title: 'Currency',
             dataIndex: 'currency',
             key: 'currency',
-            width: 80
+            width: 100
           },
           {
-            title: 'Account Type',
-            dataIndex: 'accountType',
-            key: 'accountType',
-            width: 140
-          },
-          {
-            title: 'Account',
-            dataIndex: 'account',
-            key: 'account',
-            width: 160
-          },
-          {
-            title: 'Operate Time',
-            dataIndex: 'operateTime',
-            key: 'operateTime',
-            width: 140
+            title: 'Fee Type',
+            dataIndex: 'feeType',
+            key: 'feeType',
+            width: 100
           },
           {
             title: 'Rate',
             dataIndex: 'rate',
             key: 'rate',
-            width: 80
+            width: 100,
+            scopedSlots: { customRender: 'rate' }
+          },
+          {
+            title: 'Status',
+            dataIndex: 'status',
+            key: 'status',
+            width: 100,
+            scopedSlots: { customRender: 'status' }
+          },
+          {
+            title: 'Updated Time',
+            dataIndex: 'updatedTime',
+            key: 'updatedTime',
+            width: 160
           },
           {
             title: 'Action',
@@ -646,119 +540,231 @@ export default {
           }
         ]
       }
-    },
-
-    // 过滤后的数据
-    filteredData () {
-      let data = [...this.currentTableData]
-
-      if (this.filters.clientId) {
-        data = data.filter(item =>
-          item.clientId.toLowerCase().includes(this.filters.clientId.toLowerCase())
-        )
-      }
-
-      if (this.filters.clientName) {
-        data = data.filter(item =>
-          item.clientName.toLowerCase().includes(this.filters.clientName.toLowerCase())
-        )
-      }
-
-      if (this.viewMode === 'digital') {
-        if (this.filters.channel) {
-          data = data.filter(item => item.channel === this.filters.channel)
-        }
-        if (this.filters.currency) {
-          data = data.filter(item => item.currency === this.filters.currency)
-        }
-      } else {
-        if (this.filters.entityCountry) {
-          data = data.filter(item => item.entityCountry === this.filters.entityCountry)
-        }
-        if (this.filters.accountType) {
-          data = data.filter(item => item.accountType === this.filters.accountType)
-        }
-      }
-
-      if (this.filters.status) {
-        data = data.filter(item => item.status === this.filters.status)
-      }
-
-      return data
     }
   },
 
+  created () {
+    this.fetchData()
+  },
+
   methods: {
-    // 搜索
-    handleSearch () {
-      console.log('Search filters:', this.filters)
-      this.$message.success('Search completed')
+    // 防抖处理的搜索方法
+    handleSearch: _.debounce(function () {
+      this.pagination.current = 1
+      this.fetchData()
+    }, 300),
+
+    // API调用方法
+    async fetchData () {
+      this.loading = true
+      try {
+        const params = this.buildRequestParams()
+        const apiUrl = this.viewMode === 'digital'
+          ? '/admin/merchant/recharge/v2/digital/list'
+          : '/admin/merchant/recharge/v2/fiat/list'
+
+        const response = await request({
+          url: apiUrl,
+          method: 'GET',
+          params
+        })
+
+        if (response.code === 200) {
+          this.dataList = this.mapApiDataToTableData(response.data.list || [])
+          this.pagination.total = response.data.total || 0
+          this.pagination.current = response.data.page || 1
+
+          console.log('数据加载成功:', this.dataList.length, '条记录')
+        } else {
+          this.$message.error(response.message || '获取数据失败')
+          this.dataList = []
+          this.pagination.total = 0
+        }
+      } catch (error) {
+        console.error('API调用失败:', error)
+        this.$message.error('网络错误，请稍后重试')
+        this.dataList = []
+        this.pagination.total = 0
+      } finally {
+        this.loading = false
+      }
     },
 
-    // 重置
+    // 构建请求参数
+    buildRequestParams () {
+      const params = {
+        page: this.pagination.current,
+        limit: this.pagination.pageSize
+      }
+
+      if (this.filters.merchant_no?.trim()) {
+        params.merchant_no = this.filters.merchant_no.trim()
+      }
+
+      if (this.filters.merchant_name?.trim()) {
+        params.merchant_name = this.filters.merchant_name.trim()
+      }
+
+      if (this.filters.status) {
+        params.status = this.filters.status
+      }
+
+      if (this.viewMode === 'digital') {
+        if (this.filters.currency_name) {
+          params.currency_name = this.filters.currency_name
+        }
+      } else {
+        if (this.filters.country_code) {
+          params.country_code = this.filters.country_code
+        }
+      }
+
+      return params
+    },
+
+    // 将API数据映射为表格数据格式
+    mapApiDataToTableData (apiList) {
+      return apiList.map(item => {
+        const baseData = {
+          ...item,
+          key: item.id,
+          clientId: item.merchant?.merchant_no || '-',
+          clientName: item.merchant?.merchant_name || '-',
+          feeType: item.fee_type_text || '-',
+          statusText: this.mapApiStatusToText(item.status),
+          updatedTime: this.formatTime(item.updated_at)
+        }
+
+        if (this.viewMode === 'digital') {
+          return {
+            ...baseData,
+            chainName: item.crypto_currency?.chain_name || '-',
+            currency: item.crypto_currency?.name || '-'
+          }
+        } else {
+          return {
+            ...baseData,
+            countryCode: item.merchant?.country_code || '-',
+            currency: item.fiat_currency?.name || '-'
+          }
+        }
+      })
+    },
+
+    // 将API状态数字转换为文本
+    mapApiStatusToText (status) {
+      return status === 1 ? 'Actived' : 'Disable'
+    },
+
+    // 格式化时间
+    formatTime (timeString) {
+      if (!timeString) return '-'
+
+      try {
+        const date = new Date(timeString)
+        if (isNaN(date.getTime())) return timeString
+
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        const seconds = String(date.getSeconds()).padStart(2, '0')
+
+        return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
+      } catch (error) {
+        console.error('时间格式化失败:', error)
+        return timeString
+      }
+    },
+
+    // 重置搜索
     handleReset () {
       this.filters = {
-        clientId: '',
-        clientName: '',
-        channel: '',
-        currency: '',
+        merchant_no: '',
+        merchant_name: '',
+        currency_name: '',
         status: '',
-        entityCountry: '',
-        accountType: ''
+        country_code: ''
       }
-      this.$message.info('Filters reset')
+      this.pagination.current = 1
+      this.fetchData()
+    },
+
+    // 表格分页变更
+    handleTableChange (pagination) {
+      this.pagination.current = pagination.current
+      this.pagination.pageSize = pagination.pageSize
+      this.fetchData()
     },
 
     // 切换视图模式
     switchViewMode (mode) {
       this.viewMode = mode
-      // 关闭抽屉并清空选中记录
       this.detailDrawerVisible = false
       this.selectedRecord = null
-      // 重置过滤条件
+      this.detailLoading = false
       this.filters = {
-        clientId: '',
-        clientName: '',
-        channel: '',
-        currency: '',
+        merchant_no: '',
+        merchant_name: '',
+        currency_name: '',
         status: '',
-        entityCountry: '',
-        accountType: ''
+        country_code: ''
       }
+      this.pagination.current = 1
+      this.fetchData()
       this.$message.info(`Switched to ${mode} currency view`)
     },
 
-    // 复制地址
-    copyAddress (address) {
-      if (!address) return
-      const textarea = document.createElement('textarea')
-      textarea.value = address
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      this.$message.success('Address copied to clipboard')
-    },
-
     // 编辑按钮点击
-    handleEdit (record) {
-      this.selectedRecord = { ...record }
-      this.editableRecord = {
-        rate: record.rate ? record.rate.replace('%', '') : '0.5',
-        status: record.status
-      }
+    async handleEdit (record) {
+      this.selectedRecord = null
       this.detailDrawerVisible = true
+      this.detailLoading = true
+
+      try {
+        const apiUrl = this.viewMode === 'digital'
+          ? `/admin/merchant/recharge/v2/digital/${record.id}`
+          : `/admin/merchant/recharge/v2/fiat/${record.id}`
+
+        const response = await request({
+          url: apiUrl,
+          method: 'GET'
+        })
+
+        if (response.code === 200) {
+          this.selectedRecord = response.data
+          // API返回rate_fee是小数(0.01)，转换为百分比数值(1)供编辑使用
+          this.editableRecord = {
+            rate_fee: parseFloat(response.data.rate_fee || 0) * 100, // 0.01 -> 1
+            status: response.data.status,
+            min_amount: response.data.min_amount || '0',
+            max_amount: response.data.max_amount || '0'
+          }
+          console.log('详情加载成功:', this.selectedRecord)
+        } else {
+          this.$message.error(response.message || '获取详情失败')
+          // 获取失败时保持loading状态，不填充数据
+        }
+      } catch (error) {
+        console.error('获取详情失败:', error)
+        this.$message.error('网络错误，请稍后重试')
+        // 网络错误时也保持loading状态，不填充数据
+      } finally {
+        this.detailLoading = false
+      }
     },
 
     // 关闭详情抽屉
     closeDetailDrawer () {
       this.detailDrawerVisible = false
       this.selectedRecord = null
+      this.detailLoading = false
     },
 
     // 切换状态
     toggleStatus () {
-      this.editableRecord.status = this.editableRecord.status === 'Actived' ? 'Disable' : 'Actived'
+      this.editableRecord.status = this.editableRecord.status === 1 ? -1 : 1
     },
 
     // 取消操作
@@ -767,35 +773,96 @@ export default {
     },
 
     // 确认操作
-    handleConfirm () {
-      if (this.selectedRecord) {
-        // 更新对应数据源的数据
-        const dataSource = this.viewMode === 'digital' ? this.digitalCurrencyData : this.fiatCurrencyData
-        const index = dataSource.findIndex(item => item.key === this.selectedRecord.key)
-        if (index > -1) {
-          dataSource[index].rate = this.editableRecord.rate + '%'
-          dataSource[index].status = this.editableRecord.status
+    async handleConfirm () {
+      if (!this.selectedRecord) return
+
+      // 验证输入
+      if (!this.editableRecord.rate_fee || isNaN(parseFloat(this.editableRecord.rate_fee))) {
+        this.$message.error('Please enter a valid rate')
+        return
+      }
+
+      if (!this.editableRecord.min_amount || isNaN(parseFloat(this.editableRecord.min_amount))) {
+        this.$message.error('Please enter a valid min amount')
+        return
+      }
+
+      if (!this.editableRecord.max_amount || isNaN(parseFloat(this.editableRecord.max_amount))) {
+        this.$message.error('Please enter a valid max amount')
+        return
+      }
+
+      const minAmount = parseFloat(this.editableRecord.min_amount)
+      const maxAmount = parseFloat(this.editableRecord.max_amount)
+
+      if (maxAmount > 0 && minAmount > maxAmount) {
+        this.$message.error('Min amount cannot be greater than max amount')
+        return
+      }
+
+      this.updateLoading = true
+      try {
+        const apiUrl = this.viewMode === 'digital'
+          ? '/admin/merchant/recharge/v2/digital/update'
+          : '/admin/merchant/recharge/v2/fiat/update'
+
+        // 编辑框的百分比数值(1)转换为API需要的小数(0.01)
+        const updateData = {
+          id: this.selectedRecord.id,
+          min_amount: this.editableRecord.min_amount,
+          max_amount: this.editableRecord.max_amount,
+          rate: (parseFloat(this.editableRecord.rate_fee) / 100).toFixed(4), // 1 -> 0.0100
+          status: this.editableRecord.status.toString()
         }
-        this.$message.success('Changes saved successfully')
-        this.closeDetailDrawer()
+
+        console.log('提交更新数据:', updateData)
+
+        const response = await request({
+          url: apiUrl,
+          method: 'POST',
+          data: updateData
+        })
+
+        if (response.code === 200) {
+          this.$message.success('Changes saved successfully')
+          this.closeDetailDrawer()
+          // 重新获取列表数据
+          this.fetchData()
+        } else {
+          this.$message.error(response.message || 'Update failed')
+        }
+      } catch (error) {
+        console.error('更新失败:', error)
+        this.$message.error('Network error, please try again')
+      } finally {
+        this.updateLoading = false
       }
     },
 
-    // 获取国家旗帜
-    getCountryFlag (country) {
-      const flags = {
-        'HongKong': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjRkY2QjY5Ii8+PC9zdmc+',
-        'Brazil': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjNDJCOTgzIi8+PC9zdmc+',
-        'Colombia': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjRkZEQTQ0Ii8+PC9zdmc+',
-        'Mexico': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjRkY2QjY5Ii8+PC9zdmc+'
+    // 获取状态颜色
+    getStatusColor (status) {
+      const colors = {
+        'Actived': 'green',
+        'Disable': 'red'
       }
-      return flags[country] || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjQ0NDIi8+PC9zdmc+'
+      return colors[status] || 'default'
+    },
+
+    // 获取状态图标
+    getStatusIcon (status) {
+      const icons = {
+        'Actived': 'check-circle',
+        'Disable': 'close-circle'
+      }
+      return icons[status] || 'exclamation-circle'
     }
   }
 }
 </script>
 
 <style lang="less" scoped>
+.recharge-management {
+}
   .filter-section {
     background: #fafafa;
     padding: 16px;
@@ -809,39 +876,6 @@ export default {
   }
 
   .table-section {
-    .country-cell {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      .country-flag {
-        width: 16px;
-        height: 12px;
-        border-radius: 2px;
-      }
-    }
-
-    .address-cell {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-
-      .address-text {
-        flex: 1;
-        margin-right: 8px;
-      }
-
-      .copy-btn {
-        padding: 0;
-        min-width: auto;
-        height: auto;
-
-        .anticon {
-          font-size: 12px;
-        }
-      }
-    }
-
     .edit-action {
       color: #1890ff;
       font-weight: 500;
@@ -905,6 +939,16 @@ export default {
     }
   }
 
+  .amount-input {
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid #d9d9d9;
+
+    &:hover, &:focus {
+      border-color: #40a9ff;
+    }
+  }
+
   .status-select-container {
     width: 100%;
 
@@ -944,7 +988,6 @@ export default {
         height: auto;
         font-size: 14px;
         margin-left: auto;
-
       }
     }
   }

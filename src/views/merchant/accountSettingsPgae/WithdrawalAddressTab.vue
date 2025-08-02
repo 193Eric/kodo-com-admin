@@ -5,32 +5,58 @@
       <a-row :gutter="16">
         <a-col :span="4">
           <a-input
-            v-model="filters.clientId"
+            v-model="filters.merchant_no"
             placeholder="Client ID"
             size="default"
+            allow-clear
           />
         </a-col>
         <a-col :span="4">
           <a-input
-            v-model="filters.clientName"
+            v-model="filters.merchant_name"
             placeholder="Client Name"
             size="default"
+            allow-clear
           />
         </a-col>
         <a-col :span="4">
           <a-select
-            v-model="filters.entityCountry"
-            placeholder="Entity Country/Region"
+            v-model="filters.country_code"
+            placeholder="Country Code"
             size="default"
             style="width: 100%"
             allowClear
             v-if="viewMode === 'fiat'"
           >
             <a-select-option value="">All</a-select-option>
-            <a-select-option value="HongKong">HongKong</a-select-option>
-            <a-select-option value="Brazil">Brazil</a-select-option>
-            <a-select-option value="Colombia">Colombia</a-select-option>
-            <a-select-option value="Mexico">Mexico</a-select-option>
+            <a-select-option value="HK">HongKong</a-select-option>
+            <a-select-option value="BR">Brazil</a-select-option>
+            <a-select-option value="CO">Colombia</a-select-option>
+            <a-select-option value="MX">Mexico</a-select-option>
+          </a-select>
+          <a-select
+            v-model="filters.currency_name"
+            placeholder="Currency"
+            size="default"
+            style="width: 100%"
+            allowClear
+            v-if="viewMode === 'digital'"
+          >
+            <a-select-option value="">All</a-select-option>
+            <a-select-option value="USDT">USDT</a-select-option>
+            <a-select-option value="USDC">USDC</a-select-option>
+          </a-select>
+        </a-col>
+        <a-col :span="4">
+          <a-select
+            v-model="filters.bank_name"
+            placeholder="Bank Name"
+            size="default"
+            style="width: 100%"
+            allowClear
+            v-if="viewMode === 'fiat'"
+          >
+            <a-select-option value="">All</a-select-option>
           </a-select>
           <a-select
             v-model="filters.channel"
@@ -47,32 +73,6 @@
         </a-col>
         <a-col :span="4">
           <a-select
-            v-model="filters.accountType"
-            placeholder="Account Type"
-            size="default"
-            style="width: 100%"
-            allowClear
-            v-if="viewMode === 'fiat'"
-          >
-            <a-select-option value="">All</a-select-option>
-            <a-select-option value="virtual account">virtual account</a-select-option>
-            <a-select-option value="institution account">institution account</a-select-option>
-          </a-select>
-          <a-select
-            v-model="filters.currency"
-            placeholder="Currency"
-            size="default"
-            style="width: 100%"
-            allowClear
-            v-if="viewMode === 'digital'"
-          >
-            <a-select-option value="">All</a-select-option>
-            <a-select-option value="USDT">USDT</a-select-option>
-            <a-select-option value="USDC">USDC</a-select-option>
-          </a-select>
-        </a-col>
-        <a-col :span="4">
-          <a-select
             v-model="filters.status"
             placeholder="Status"
             size="default"
@@ -80,13 +80,13 @@
             allowClear
           >
             <a-select-option value="">All</a-select-option>
-            <a-select-option value="Pending">Pending</a-select-option>
-            <a-select-option value="Actived">Actived</a-select-option>
-            <a-select-option value="Disable">Disable</a-select-option>
+            <a-select-option value="0">Pending</a-select-option>
+            <a-select-option value="1">Approved</a-select-option>
+            <a-select-option value="-1">Rejected</a-select-option>
           </a-select>
         </a-col>
         <a-col :span="4">
-          <a-button type="primary" @click="handleSearch" style="margin-right: 8px">
+          <a-button type="primary" @click="handleSearch" :loading="loading" style="margin-right: 8px">
             Search
           </a-button>
           <a-button @click="handleReset">
@@ -118,20 +118,14 @@
     <div class="table-section">
       <a-table
         :columns="currentColumns"
-        :dataSource="filteredData"
+        :dataSource="dataList"
         :pagination="pagination"
         :scroll="{ x: 1400 }"
+        :loading="loading"
         rowKey="key"
         size="middle"
+        @change="handleTableChange"
       >
-        <!-- 实体国家/地区列自定义渲染 -->
-        <template slot="entityCountry" slot-scope="text, record">
-          <div class="country-cell">
-            <img :src="getCountryFlag(text)" class="country-flag" :alt="text" />
-            <span>{{ text }}</span>
-          </div>
-        </template>
-
         <!-- 地址列自定义渲染 -->
         <template slot="address" slot-scope="text, record">
           <div class="address-cell">
@@ -147,14 +141,14 @@
           </div>
         </template>
 
-        <!-- 状态列自定义渲染 - 不可点击 -->
+        <!-- 状态列自定义渲染 -->
         <template slot="status" slot-scope="text, record">
           <a-tag
-            :color="getStatusColor(text)"
+            :color="getStatusColor(record.statusText)"
             class="status-tag"
           >
-            <a-icon :type="getStatusIcon(text)" />
-            {{ text }}
+            <a-icon :type="getStatusIcon(record.statusText)" />
+            {{ record.statusText }}
           </a-tag>
         </template>
 
@@ -164,9 +158,9 @@
             type="link"
             size="small"
             @click="handleAction(record)"
-            :class="{ 'review-action': record.status === 'Pending' }"
+            :class="{ 'review-action': record.statusText === 'Pending' }"
           >
-            {{ record.status === 'Pending' ? 'Review' : 'View' }}
+            {{ record.statusText === 'Pending' ? 'Review' : 'View' }}
           </a-button>
         </template>
       </a-table>
@@ -181,7 +175,7 @@
       :bodyStyle="{ padding: '24px', paddingBottom: '80px' }"
     >
       <div v-if="selectedRecord">
-        <a-row :gutter="[16, 24]">
+        <a-row :gutter="[16, 16]">
           <a-col :span="12">
             <div class="detail-item">
               <div class="detail-label">Client ID</div>
@@ -192,12 +186,6 @@
             <div class="detail-item">
               <div class="detail-label">Client Name</div>
               <div class="detail-value">{{ selectedRecord.clientName }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Submit Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
             </div>
           </a-col>
           <a-col :span="12">
@@ -217,19 +205,54 @@
               </div>
             </div>
           </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Status</div>
+              <div class="detail-value">
+                <a-tag :color="getStatusColor(selectedRecord.statusText)">
+                  <a-icon :type="getStatusIcon(selectedRecord.statusText)" />
+                  {{ selectedRecord.statusText }}
+                </a-tag>
+              </div>
+            </div>
+          </a-col>
 
           <!-- Digital Currency 特有字段 -->
           <template v-if="viewMode === 'digital'">
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Channel</div>
+                <div class="detail-label">Wallet Name</div>
+                <div class="detail-value">{{ selectedRecord.walletName }}</div>
+              </div>
+            </a-col>
+            <a-col :span="12">
+              <div class="detail-item">
+                <div class="detail-label">Chain Name</div>
                 <div class="detail-value">{{ selectedRecord.channel }}</div>
               </div>
             </a-col>
             <a-col :span="12">
               <div class="detail-item">
+                <div class="detail-label">Balance</div>
+                <div class="detail-value">{{ selectedRecord.balance }}</div>
+              </div>
+            </a-col>
+            <a-col :span="12">
+              <div class="detail-item">
+                <div class="detail-label">Frozen Amount</div>
+                <div class="detail-value">{{ selectedRecord.frozenAmount }}</div>
+              </div>
+            </a-col>
+            <a-col :span="24">
+              <div class="detail-item">
                 <div class="detail-label">Address</div>
                 <div class="detail-value">{{ selectedRecord.address }}</div>
+              </div>
+            </a-col>
+            <a-col :span="24" v-if="selectedRecord.memo && selectedRecord.memo !== '-'">
+              <div class="detail-item">
+                <div class="detail-label">Memo</div>
+                <div class="detail-value">{{ selectedRecord.memo }}</div>
               </div>
             </a-col>
           </template>
@@ -238,13 +261,8 @@
           <template v-if="viewMode === 'fiat'">
             <a-col :span="12">
               <div class="detail-item">
-                <div class="detail-label">Entity Country/Region</div>
-                <div class="detail-value">
-                  <div class="country-cell">
-                    <img :src="getCountryFlag(selectedRecord.entityCountry)" class="country-flag" :alt="selectedRecord.entityCountry" />
-                    <span>{{ selectedRecord.entityCountry }}</span>
-                  </div>
-                </div>
+                <div class="detail-label">Bank Name</div>
+                <div class="detail-value">{{ selectedRecord.bankName }}</div>
               </div>
             </a-col>
             <a-col :span="12">
@@ -253,14 +271,30 @@
                 <div class="detail-value">{{ selectedRecord.accountType }}</div>
               </div>
             </a-col>
-            <a-col :span="12">
+            <a-col :span="24">
               <div class="detail-item">
-                <div class="detail-label">Account</div>
+                <div class="detail-label">Account Number</div>
                 <div class="detail-value">{{ selectedRecord.account }}</div>
               </div>
             </a-col>
           </template>
 
+          <!-- <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Status</div>
+              <div class="detail-value">
+                <a-tag :color="getStatusColor(selectedRecord.statusText)">
+                  <a-icon :type="getStatusIcon(selectedRecord.statusText)" />
+                  {{ selectedRecord.statusText }}
+                </a-tag>
+              </div>
+            </div></a-col> -->
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Submit Time</div>
+              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
+            </div>
+          </a-col>
           <a-col :span="12">
             <div class="detail-item">
               <div class="detail-label">Operator ID</div>
@@ -273,29 +307,13 @@
               <div class="detail-value">{{ selectedRecord.operatorName || 'John Smith' }}</div>
             </div>
           </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Operate Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Status</div>
-              <div class="detail-value">
-                <a-tag :color="getStatusColor(selectedRecord.status)">
-                  <a-icon :type="getStatusIcon(selectedRecord.status)" />
-                  {{ selectedRecord.status }}
-                </a-tag>
-              </div>
-            </div>
-          </a-col>
         </a-row>
 
         <!-- 抽屉底部按钮 - 只有Pending状态才显示 -->
-        <div v-if="selectedRecord.status === 'Pending'" class="drawer-footer">
+        <div v-if="selectedRecord.statusText === 'Pending'" class="drawer-footer">
           <a-button
             @click="handleReject"
+            :loading="actionLoading"
             style="margin-right: 8px"
             size="large"
           >
@@ -304,6 +322,7 @@
           <a-button
             type="primary"
             @click="handleAgree"
+            :loading="actionLoading"
             size="large"
           >
             Agree
@@ -315,22 +334,29 @@
 </template>
 
 <script>
+import { request } from '@/api/_service'
+import _ from 'lodash'
+
 export default {
   name: 'WithdrawalAddressManagement',
   data () {
     return {
+      // 加载状态
+      loading: false,
+      actionLoading: false,
+
       // 视图模式
       viewMode: 'digital',
 
       // 过滤条件
       filters: {
-        clientId: '',
-        clientName: '',
-        channel: '',
-        currency: '',
+        merchant_no: '',
+        merchant_name: '',
         status: '',
-        entityCountry: '',
-        accountType: ''
+        country_code: '',
+        bank_name: '',
+        channel: '',
+        currency_name: ''
       },
 
       // 抽屉状态
@@ -341,144 +367,19 @@ export default {
       pagination: {
         current: 1,
         pageSize: 10,
-        total: 97,
+        total: 0,
         showSizeChanger: true,
         showQuickJumper: true,
         showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
         pageSizeOptions: ['10', '20', '50', '100']
       },
 
-      // 数字货币数据
-      digitalCurrencyData: [
-        {
-          key: 'digital-1',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDT',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Pending'
-        },
-        {
-          key: 'digital-2',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDT',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Pending'
-        },
-        {
-          key: 'digital-3',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDC',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Pending'
-        },
-        {
-          key: 'digital-4',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'TRC20',
-          currency: 'USDC',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Actived'
-        },
-        {
-          key: 'digital-5',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          channel: 'ERC20',
-          currency: 'USDT',
-          address: 'TPRgvk...JoCSck',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Actived'
-        }
-      ],
-
-      // 法币数据
-      fiatCurrencyData: [
-        {
-          key: 'fiat-1',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'HongKong',
-          currency: 'HKD',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Pending'
-        },
-        {
-          key: 'fiat-2',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Colombia',
-          currency: 'COP',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Pending'
-        },
-        {
-          key: 'fiat-3',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Brazil',
-          currency: 'BRL',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Pending'
-        },
-        {
-          key: 'fiat-4',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Mexico',
-          currency: 'MXN',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Actived'
-        },
-        {
-          key: 'fiat-5',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'HongKong',
-          currency: 'HKD',
-          accountType: 'institution account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Actived'
-        }
-      ]
+      // 数据列表
+      dataList: []
     }
   },
 
   computed: {
-    // 当前数据源
-    currentTableData () {
-      return this.viewMode === 'digital' ? this.digitalCurrencyData : this.fiatCurrencyData
-    },
-
     // 当前表格列配置
     currentColumns () {
       if (this.viewMode === 'digital') {
@@ -487,7 +388,7 @@ export default {
             title: 'Client ID',
             dataIndex: 'clientId',
             key: 'clientId',
-            width: 100,
+            width: 150,
             fixed: 'left'
           },
           {
@@ -500,6 +401,12 @@ export default {
             title: 'Client Name',
             dataIndex: 'clientName',
             key: 'clientName',
+            width: 150
+          },
+          {
+            title: 'Wallet Name',
+            dataIndex: 'walletName',
+            key: 'walletName',
             width: 120
           },
           {
@@ -548,7 +455,7 @@ export default {
             title: 'Client ID',
             dataIndex: 'clientId',
             key: 'clientId',
-            width: 100,
+            width: 150,
             fixed: 'left'
           },
           {
@@ -561,26 +468,25 @@ export default {
             title: 'Client Name',
             dataIndex: 'clientName',
             key: 'clientName',
-            width: 120
+            width: 150
           },
           {
-            title: 'Entity Country/Region',
-            dataIndex: 'entityCountry',
-            key: 'entityCountry',
-            width: 160,
-            scopedSlots: { customRender: 'entityCountry' }
+            title: 'Bank Name',
+            dataIndex: 'bankName',
+            key: 'bankName',
+            width: 120
           },
           {
             title: 'Currency',
             dataIndex: 'currency',
             key: 'currency',
-            width: 80
+            width: 100
           },
           {
             title: 'Account Type',
             dataIndex: 'accountType',
             key: 'accountType',
-            width: 140
+            width: 100
           },
           {
             title: 'Account',
@@ -592,7 +498,7 @@ export default {
             title: 'Operate Time',
             dataIndex: 'operateTime',
             key: 'operateTime',
-            width: 140
+            width: 160
           },
           {
             title: 'Status',
@@ -610,91 +516,236 @@ export default {
           }
         ]
       }
-    },
-
-    // 过滤后的数据
-    filteredData () {
-      let data = [...this.currentTableData]
-
-      if (this.filters.clientId) {
-        data = data.filter(item =>
-          item.clientId.toLowerCase().includes(this.filters.clientId.toLowerCase())
-        )
-      }
-
-      if (this.filters.clientName) {
-        data = data.filter(item =>
-          item.clientName.toLowerCase().includes(this.filters.clientName.toLowerCase())
-        )
-      }
-
-      if (this.viewMode === 'digital') {
-        if (this.filters.channel) {
-          data = data.filter(item => item.channel === this.filters.channel)
-        }
-        if (this.filters.currency) {
-          data = data.filter(item => item.currency === this.filters.currency)
-        }
-      } else {
-        if (this.filters.entityCountry) {
-          data = data.filter(item => item.entityCountry === this.filters.entityCountry)
-        }
-        if (this.filters.accountType) {
-          data = data.filter(item => item.accountType === this.filters.accountType)
-        }
-      }
-
-      if (this.filters.status) {
-        data = data.filter(item => item.status === this.filters.status)
-      }
-
-      return data
     }
   },
 
+  created () {
+    this.fetchData()
+  },
+
   methods: {
-    // 搜索
-    handleSearch () {
-      console.log('Search filters:', this.filters)
-      this.$message.success('Search completed')
+    // 防抖处理的搜索方法
+    handleSearch: _.debounce(function () {
+      this.pagination.current = 1
+      this.fetchData()
+    }, 300),
+
+    // API调用方法
+    async fetchData () {
+      this.loading = true
+      try {
+        const params = this.buildRequestParams()
+        const apiUrl = this.viewMode === 'digital'
+          ? '/admin/merchant/withdraw/v2/digital/address/list'
+          : '/admin/merchant/withdraw/v2/fiat/address/list'
+
+        const response = await request({
+          url: apiUrl,
+          method: 'GET',
+          params
+        })
+
+        if (response.code === 200) {
+          this.dataList = this.mapApiDataToTableData(response.data.list || [])
+          this.pagination.total = response.data.total || 0
+          this.pagination.current = response.data.page || 1
+
+          console.log('数据加载成功:', this.dataList.length, '条记录')
+        } else {
+          this.$message.error(response.message || '获取数据失败')
+          this.dataList = []
+          this.pagination.total = 0
+        }
+      } catch (error) {
+        console.error('API调用失败:', error)
+        this.$message.error('网络错误，请稍后重试')
+        this.dataList = []
+        this.pagination.total = 0
+      } finally {
+        this.loading = false
+      }
     },
 
-    // 重置
+    // 构建请求参数
+    buildRequestParams () {
+      const params = {
+        page: this.pagination.current,
+        limit: this.pagination.pageSize
+      }
+
+      if (this.filters.merchant_no?.trim()) {
+        params.merchant_no = this.filters.merchant_no.trim()
+      }
+
+      if (this.filters.merchant_name?.trim()) {
+        params.merchant_name = this.filters.merchant_name.trim()
+      }
+
+      if (this.filters.status) {
+        params.status = this.filters.status
+      }
+
+      if (this.viewMode === 'fiat' && this.filters.country_code) {
+        params.country_code = this.filters.country_code
+      }
+
+      return params
+    },
+
+    // 将API数据映射为表格数据格式
+    mapApiDataToTableData (apiList) {
+      return apiList.map(item => {
+        const baseData = {
+          ...item,
+          key: item.id,
+          clientId: item.merchant?.merchant_no || '-',
+          clientName: item.merchant?.merchant_name || '-',
+          accountId: item.id || '-', // Account ID 统一使用 id
+          statusText: item.status_text || this.mapApiStatusToText(item.status),
+          operateTime: this.formatTime(item.updated_at || item.created_at)
+        }
+
+        if (this.viewMode === 'digital') {
+          return {
+            ...baseData,
+            walletName: item.wallet_name || '-',
+            channel: item.chain_name || '-',
+            currency: item.coin_name || '-',
+            address: this.formatAddress(item.address),
+            memo: item.memo || '-',
+            balance: item.balance || '0.00000000',
+            frozenAmount: item.frozen_amount || '0.00000000'
+          }
+        } else {
+          return {
+            ...baseData,
+            bankName: item.bank_name || '-',
+            currency: item.currency_name || item.currency || '-',
+            accountType: this.mapAccountTypeToText(item.account_type),
+            account: item.masked_account_number || item.account_number || '-'
+          }
+        }
+      })
+    },
+
+    // 将账户类型枚举转换为文本
+    mapAccountTypeToText (accountType) {
+      const typeMap = {
+        1: '对公', // 对公账户
+        2: '对私' // 对私账户
+      }
+      return typeMap[accountType] || (accountType || '-')
+    },
+
+    // 格式化地址显示
+    formatAddress (address) {
+      if (!address || address.trim() === '') {
+        return 'Not Set'
+      }
+
+      if (address.length > 20) {
+        return `${address.substring(0, 8)}...${address.substring(address.length - 6)}`
+      }
+
+      return address
+    },
+
+    // 将API状态数字转换为文本
+    mapApiStatusToText (status) {
+      const STATUS_PENDING = 0 // 待审核
+      const STATUS_APPROVED = 1 // 已通过
+      const STATUS_REJECTED = -1 // 已拒绝
+
+      const statusMap = {
+        [STATUS_PENDING]: 'Pending',
+        [STATUS_APPROVED]: 'Approved',
+        [STATUS_REJECTED]: 'Rejected'
+      }
+
+      // 兼容API返回的状态文本
+      if (typeof status === 'string') {
+        const textMap = {
+          'Disabled': 'Disabled',
+          'Enabled': 'Approved',
+          'Active': 'Active',
+          'Pending': 'Pending'
+        }
+        return textMap[status] || status
+      }
+
+      return statusMap[status] || 'Unknown'
+    },
+
+    // 格式化时间
+    formatTime (timeString) {
+      if (!timeString) return '-'
+
+      try {
+        const date = new Date(timeString)
+        if (isNaN(date.getTime())) return timeString
+
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        const seconds = String(date.getSeconds()).padStart(2, '0')
+
+        return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
+      } catch (error) {
+        console.error('时间格式化失败:', error)
+        return timeString
+      }
+    },
+
+    // 重置搜索
     handleReset () {
       this.filters = {
-        clientId: '',
-        clientName: '',
-        channel: '',
-        currency: '',
+        merchant_no: '',
+        merchant_name: '',
         status: '',
-        entityCountry: '',
-        accountType: ''
+        country_code: '',
+        bank_name: '',
+        channel: '',
+        currency_name: ''
       }
-      this.$message.info('Filters reset')
+      this.pagination.current = 1
+      this.fetchData()
+    },
+
+    // 表格分页变更
+    handleTableChange (pagination) {
+      this.pagination.current = pagination.current
+      this.pagination.pageSize = pagination.pageSize
+      this.fetchData()
     },
 
     // 切换视图模式
     switchViewMode (mode) {
       this.viewMode = mode
-      // 关闭抽屉并清空选中记录
       this.detailDrawerVisible = false
       this.selectedRecord = null
-      // 重置过滤条件
       this.filters = {
-        clientId: '',
-        clientName: '',
-        channel: '',
-        currency: '',
+        merchant_no: '',
+        merchant_name: '',
         status: '',
-        entityCountry: '',
-        accountType: ''
+        country_code: '',
+        bank_name: '',
+        channel: '',
+        currency_name: ''
       }
+      this.pagination.current = 1
+      this.fetchData()
       this.$message.info(`Switched to ${mode} currency view`)
     },
 
     // 复制地址
     copyAddress (address) {
-      if (!address) return
+      if (address === 'Not Set' || !address) {
+        this.$message.warning('Address not set')
+        return
+      }
+
       const textarea = document.createElement('textarea')
       textarea.value = address
       document.body.appendChild(textarea)
@@ -705,9 +756,86 @@ export default {
     },
 
     // 操作按钮点击
-    handleAction (record) {
-      this.selectedRecord = { ...record }
+    async handleAction (record) {
+      this.selectedRecord = null
       this.detailDrawerVisible = true
+      this.actionLoading = true
+
+      try {
+        const apiUrl = this.viewMode === 'digital'
+          ? `/admin/merchant/withdraw/v2/digital/address/${record.id}`
+          : `/admin/merchant/withdraw/v2/fiat/address/${record.id}`
+
+        const response = await request({
+          url: apiUrl,
+          method: 'GET'
+        })
+
+        if (response.code === 200) {
+          this.selectedRecord = this.mapDetailDataToDisplay(response.data)
+          console.log('详情加载成功:', this.selectedRecord)
+        } else {
+          this.$message.error(response.message || '获取详情失败')
+          // 获取失败时保持loading状态，不填充数据
+        }
+      } catch (error) {
+        console.error('获取详情失败:', error)
+        this.$message.error('网络错误，请稍后重试')
+        // 网络错误时也保持loading状态，不填充数据
+      } finally {
+        this.actionLoading = false
+      }
+    },
+
+    // 将详情API数据映射为显示格式
+    mapDetailDataToDisplay (apiData) {
+      const baseData = {
+        ...apiData,
+        clientId: apiData.merchant?.merchant_no || '-',
+        clientName: apiData.merchant?.merchant_name || '-',
+        accountId: apiData.id || '-',
+        statusText: apiData.status_text || this.mapApiStatusToText(apiData.status),
+        operateTime: this.formatTime(apiData.updated_at || apiData.created_at)
+      }
+
+      if (this.viewMode === 'digital') {
+        return {
+          ...baseData,
+          walletName: apiData.wallet_name || '-',
+          channel: apiData.chain_name || '-',
+          currency: apiData.coin_name || '-',
+          address: apiData.address || 'Not Set',
+          memo: apiData.memo || '-',
+          balance: apiData.balance || '0.00000000',
+          frozenAmount: apiData.frozen_amount || '0.00000000',
+          dailyWithdrawalLimit: apiData.daily_withdrawal_limit || '-',
+          whitelistIps: apiData.whitelist_ips || '-',
+          remarks: apiData.remarks || '-'
+        }
+      } else {
+        return {
+          ...baseData,
+          accountName: apiData.account_name || '-',
+          bankName: apiData.bank_name || '-',
+          bankCode: apiData.bank_code || '-',
+          accountNumber: apiData.account_number || '-',
+          accountType: this.mapAccountTypeToText(apiData.account_type),
+          countryName: apiData.country_name || '-',
+          countryCode: apiData.country_code || '-',
+          residenceAddress: apiData.residence_address || '-',
+          postalCode: apiData.postal_code || '-',
+          intermediateBankName: apiData.intermediate_bank_name || '-',
+          intermediateBankSwiftCode: apiData.intermediate_bank_swift_code || '-',
+          bankBranch: apiData.bank_branch || '-',
+          city: apiData.city || '-',
+          state: apiData.state || '-',
+          currency: apiData.currency || '-',
+          proofFiles: apiData.proof_files || [],
+          reviewedAt: apiData.reviewed_at ? this.formatTime(apiData.reviewed_at) : '-',
+          reviewedBy: apiData.reviewed_by || '-',
+          account: apiData.masked_account_number || apiData.account_number || '-'
+        }
+      }
     },
 
     // 关闭详情抽屉
@@ -717,32 +845,70 @@ export default {
     },
 
     // 拒绝操作
-    handleReject () {
-      if (this.selectedRecord) {
-        // 更新对应数据源的状态
-        const dataSource = this.viewMode === 'digital' ? this.digitalCurrencyData : this.fiatCurrencyData
-        const index = dataSource.findIndex(item => item.key === this.selectedRecord.key)
-        if (index > -1) {
-          dataSource[index].status = 'Disable'
-          this.selectedRecord.status = 'Disable'
+    async handleReject () {
+      if (!this.selectedRecord) return
+
+      this.actionLoading = true
+      try {
+        const apiUrl = this.viewMode === 'digital'
+          ? '/admin/merchant/withdraw/v2/digital/address/reject'
+          : '/admin/merchant/withdraw/v2/fiat/address/reject'
+
+        const response = await request({
+          url: apiUrl,
+          method: 'POST',
+          data: {
+            id: this.selectedRecord.id
+          }
+        })
+
+        if (response.code === 200) {
+          this.$message.success('Request rejected successfully')
+          this.closeDetailDrawer()
+          // 重新获取列表数据
+          this.fetchData()
+        } else {
+          this.$message.error(response.message || 'Reject operation failed')
         }
-        this.$message.success('Request rejected')
-        this.closeDetailDrawer()
+      } catch (error) {
+        console.error('拒绝操作失败:', error)
+        this.$message.error('Network error, please try again')
+      } finally {
+        this.actionLoading = false
       }
     },
 
     // 同意操作
-    handleAgree () {
-      if (this.selectedRecord) {
-        // 更新对应数据源的状态
-        const dataSource = this.viewMode === 'digital' ? this.digitalCurrencyData : this.fiatCurrencyData
-        const index = dataSource.findIndex(item => item.key === this.selectedRecord.key)
-        if (index > -1) {
-          dataSource[index].status = 'Actived'
-          this.selectedRecord.status = 'Actived'
+    async handleAgree () {
+      if (!this.selectedRecord) return
+
+      this.actionLoading = true
+      try {
+        const apiUrl = this.viewMode === 'digital'
+          ? '/admin/merchant/withdraw/v2/digital/address/approve'
+          : '/admin/merchant/withdraw/v2/fiat/address/approve'
+
+        const response = await request({
+          url: apiUrl,
+          method: 'POST',
+          data: {
+            id: this.selectedRecord.id
+          }
+        })
+
+        if (response.code === 200) {
+          this.$message.success('Request approved successfully')
+          this.closeDetailDrawer()
+          // 重新获取列表数据
+          this.fetchData()
+        } else {
+          this.$message.error(response.message || 'Approve operation failed')
         }
-        this.$message.success('Request approved')
-        this.closeDetailDrawer()
+      } catch (error) {
+        console.error('同意操作失败:', error)
+        this.$message.error('Network error, please try again')
+      } finally {
+        this.actionLoading = false
       }
     },
 
@@ -750,8 +916,11 @@ export default {
     getStatusColor (status) {
       const colors = {
         'Pending': 'orange',
-        'Actived': 'green',
-        'Disable': 'red'
+        'Approved': 'green',
+        'Rejected': 'red',
+        'Disabled': 'red',
+        'Active': 'green',
+        'Enabled': 'green'
       }
       return colors[status] || 'default'
     },
@@ -760,21 +929,13 @@ export default {
     getStatusIcon (status) {
       const icons = {
         'Pending': 'clock-circle',
-        'Actived': 'check-circle',
-        'Disable': 'close-circle'
+        'Approved': 'check-circle',
+        'Rejected': 'close-circle',
+        'Disabled': 'close-circle',
+        'Active': 'check-circle',
+        'Enabled': 'check-circle'
       }
       return icons[status] || 'exclamation-circle'
-    },
-
-    // 获取国家旗帜
-    getCountryFlag (country) {
-      const flags = {
-        'HongKong': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjRkY2QjY5Ii8+PC9zdmc+',
-        'Brazil': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjNDJCOTgzIi8+PC9zdmc+',
-        'Colombia': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjRkZEQTQ0Ii8+PC9zdmc+',
-        'Mexico': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjRkY2QjY5Ii8+PC9zdmc+'
-      }
-      return flags[country] || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjQ0NDIi8+PC9zdmc+'
     }
   }
 }
@@ -782,6 +943,7 @@ export default {
 
 <style lang="less" scoped>
 .withdrawal-address-management {
+}
   .filter-section {
     background: #fafafa;
     padding: 16px;
@@ -795,18 +957,6 @@ export default {
   }
 
   .table-section {
-    .country-cell {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      .country-flag {
-        width: 16px;
-        height: 12px;
-        border-radius: 2px;
-      }
-    }
-
     .address-cell {
       display: flex;
       align-items: center;
@@ -864,8 +1014,6 @@ export default {
       }
     }
   }
-
-}
 
   // 抽屉底部按钮样式
   .drawer-footer {

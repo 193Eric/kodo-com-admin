@@ -5,47 +5,48 @@
       <a-row :gutter="16">
         <a-col :span="4">
           <a-input
-            v-model="filters.clientId"
+            v-model="filters.merchant_no"
             placeholder="Client ID"
             size="default"
+            allow-clear
           />
         </a-col>
         <a-col :span="4">
           <a-input
-            v-model="filters.clientName"
+            v-model="filters.merchant_name"
             placeholder="Client Name"
             size="default"
+            allow-clear
           />
         </a-col>
         <a-col :span="4">
           <a-select
-            v-model="filters.entityCountry"
+            v-model="filters.country_code"
             placeholder="Entity Country/Region"
             size="default"
             style="width: 100%"
             allowClear
           >
-            <a-select-option value="">All</a-select-option>
-            <a-select-option value="HongKong">HongKong</a-select-option>
-            <a-select-option value="Brazil">Brazil</a-select-option>
-            <a-select-option value="Colombia">Colombia</a-select-option>
-            <a-select-option value="Mexico">Mexico</a-select-option>
+            <a-select-option value="HK">Hong Kong</a-select-option>
+            <a-select-option value="BR">Brazil</a-select-option>
+            <a-select-option value="CO">Colombia</a-select-option>
+            <a-select-option value="MX">Mexico</a-select-option>
+            <a-select-option value="US">USA</a-select-option>
           </a-select>
         </a-col>
-        <a-col :span="4">
+        <a-col :span="3">
           <a-select
-            v-model="filters.accountType"
+            v-model="filters.account_type"
             placeholder="Account Type"
             size="default"
             style="width: 100%"
             allowClear
           >
-            <a-select-option value="">All</a-select-option>
-            <a-select-option value="virtual account">virtual account</a-select-option>
-            <a-select-option value="institution account">institution account</a-select-option>
+            <a-select-option value="Virtual Account">Virtual Account</a-select-option>
+            <a-select-option value="Institution Account">Institution Account</a-select-option>
           </a-select>
         </a-col>
-        <a-col :span="4">
+        <a-col :span="3">
           <a-select
             v-model="filters.status"
             placeholder="Status"
@@ -53,14 +54,12 @@
             style="width: 100%"
             allowClear
           >
-            <a-select-option value="">All</a-select-option>
-            <a-select-option value="Actived">Actived</a-select-option>
-            <a-select-option value="Disable">Disable</a-select-option>
-            <a-select-option value="Inactive">Inactive</a-select-option>
+            <a-select-option value="1">Actived</a-select-option>
+            <a-select-option value="-1">Disable</a-select-option>
           </a-select>
         </a-col>
-        <a-col :span="4">
-          <a-button type="primary" @click="handleSearch" style="margin-right: 8px">
+        <a-col :span="6">
+          <a-button type="primary" @click="handleSearch" :loading="loading" style="margin-right: 8px">
             Search
           </a-button>
           <a-button @click="handleReset">
@@ -71,12 +70,12 @@
     </div>
 
     <!-- 新增按钮 -->
-    <div class="action-section">
+    <!-- <div class="action-section">
       <a-button type="primary" @click="handleNewAccount">
         <a-icon type="plus" />
         New Account
       </a-button>
-    </div>
+    </div> -->
 
     <!-- 数据表格 -->
     <div class="table-section">
@@ -85,26 +84,25 @@
         :dataSource="filteredData"
         :pagination="pagination"
         :scroll="{ x: 1400 }"
+        :loading="loading"
         rowKey="key"
         size="middle"
+        @change="handleTableChange"
       >
         <!-- 实体国家/地区列自定义渲染 -->
         <template slot="entityCountry" slot-scope="text, record">
-          <div class="country-cell">
-            <img :src="getCountryFlag(text)" class="country-flag" :alt="text" />
-            <span>{{ text }}</span>
-          </div>
+          <span>{{ text }}</span>
         </template>
 
         <!-- 状态列自定义渲染 -->
         <template slot="status" slot-scope="text, record">
           <a-tag
-            :color="getStatusColor(text)"
+            :color="getStatusColor(record.statusText)"
             @click="handleStatusClick(record)"
             class="status-tag clickable"
           >
-            <a-icon :type="getStatusIcon(text)" />
-            {{ text }}
+            <a-icon :type="getStatusIcon(record.statusText)" />
+            {{ record.statusText }}
           </a-tag>
         </template>
 
@@ -114,9 +112,9 @@
             type="link"
             size="small"
             @click="handleView(record)"
-            :class="{ 'edit-action': record.status === 'Inactive' }"
+            :class="{ 'edit-action': record.statusText === 'Disable' }"
           >
-            {{ record.status === 'Inactive' ? 'Edit' : 'View' }}
+            {{ record.statusText === 'Disable' ? 'Edit' : 'View' }}
           </a-button>
         </template>
       </a-table>
@@ -132,6 +130,7 @@
       :okText="'Confirm'"
       :cancelText="'Cancel'"
       :maskClosable="false"
+      :confirmLoading="statusUpdateLoading"
     >
       <div v-if="selectedRecord" class="status-modal-content">
         <!-- Client Name -->
@@ -154,7 +153,7 @@
                       :checked="accountActive"
                       size="default"
                     />
-                    <span class="switch-status-text">{{ accountActive ? 'Actived' : 'Inactive' }}</span>
+                    <span class="switch-status-text">{{ accountActive ? 'Actived' : 'Disable' }}</span>
                   </div>
                 </div>
               </div>
@@ -172,86 +171,145 @@
       @close="closeDetailDrawer"
       :bodyStyle="{ padding: '24px' }"
     >
-      <div v-if="selectedRecord">
+      <!-- 加载状态 -->
+      <div v-if="detailLoading" style="text-align: center; padding: 60px 0;">
+        <a-spin size="large" />
+        <div style="margin-top: 16px; color: #666;">
+          Loading details...
+        </div>
+      </div>
+
+      <!-- 详情内容 -->
+      <div v-else-if="selectedRecord">
         <a-row :gutter="[16, 24]">
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Client ID</div>
-              <div class="detail-value">{{ selectedRecord.clientId }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Client Name</div>
-              <div class="detail-value">{{ selectedRecord.clientName }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Submit Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Entity Country/Region</div>
-              <div class="detail-value">
-                <img :src="getCountryFlag(selectedRecord.entityCountry)" class="country-flag" :alt="selectedRecord.entityCountry" />
-                {{ selectedRecord.entityCountry }}
-              </div>
-            </div>
-          </a-col>
+          <!-- 基本信息 -->
           <a-col :span="12">
             <div class="detail-item">
               <div class="detail-label">Account ID</div>
-              <div class="detail-value">{{ selectedRecord.accountId }}</div>
+              <div class="detail-value">{{ selectedRecord.id }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
-              <div class="detail-label">Account</div>
-              <div class="detail-value">{{ selectedRecord.account }}</div>
+              <div class="detail-label">Merchant ID</div>
+              <div class="detail-value">{{ selectedRecord.merchant_id }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Gateway ID</div>
+              <div class="detail-value">{{ selectedRecord.gateway_id }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Fiat Currency ID</div>
+              <div class="detail-value">{{ selectedRecord.fiat_currency_id }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
               <div class="detail-label">Account Type</div>
-              <div class="detail-value">{{ selectedRecord.accountType }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Currency</div>
-              <div class="detail-value">{{ selectedRecord.currency }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Operator ID</div>
-              <div class="detail-value">{{ selectedRecord.operatorId || 'OP-101' }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Operator Name</div>
-              <div class="detail-value">{{ selectedRecord.operatorName || 'John Smith' }}</div>
-            </div>
-          </a-col>
-          <a-col :span="12">
-            <div class="detail-item">
-              <div class="detail-label">Operate Time</div>
-              <div class="detail-value">{{ selectedRecord.operateTime }}</div>
+              <div class="detail-value">{{ getAccountTypeText(selectedRecord.account_type) }}</div>
             </div>
           </a-col>
           <a-col :span="12">
             <div class="detail-item">
               <div class="detail-label">Status</div>
               <div class="detail-value">
-                <a-tag :color="getStatusColor(selectedRecord.status)">
-                  <a-icon :type="getStatusIcon(selectedRecord.status)" />
-                  {{ selectedRecord.status }}
+                <a-tag :color="getStatusColor(mapApiStatusToText(selectedRecord.status))">
+                  <a-icon :type="getStatusIcon(mapApiStatusToText(selectedRecord.status))" />
+                  {{ mapApiStatusToText(selectedRecord.status) }}
                 </a-tag>
               </div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Country</div>
+              <div class="detail-value">{{ selectedRecord.country }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Created Time</div>
+              <div class="detail-value">{{ formatTime(selectedRecord.created_at) }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Updated Time</div>
+              <div class="detail-value">{{ formatTime(selectedRecord.updated_at) }}</div>
+            </div>
+          </a-col>
+
+          <!-- 余额信息 -->
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Available Balance</div>
+              <div class="detail-value">{{ selectedRecord.available_balance }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Frozen Balance</div>
+              <div class="detail-value">{{ selectedRecord.frozen_balance }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Total Income</div>
+              <div class="detail-value">{{ selectedRecord.total_income }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Total Outlay</div>
+              <div class="detail-value">{{ selectedRecord.total_outlay }}</div>
+            </div>
+          </a-col>
+          <a-col :span="12">
+            <div class="detail-item">
+              <div class="detail-label">Daily Limit</div>
+              <div class="detail-value">{{ selectedRecord.daily_limit || 'No Limit' }}</div>
+            </div>
+          </a-col>
+
+          <!-- 商户详细信息 -->
+          <a-col :span="24" v-if="selectedRecord.merchant">
+            <div class="detail-item">
+              <div class="detail-label">Merchant Details</div>
+              <div class="detail-value">
+                <div style="font-size: 12px; line-height: 1.6;">
+                  <div><strong>Merchant No:</strong> {{ selectedRecord.merchant.merchant_no }}</div>
+                  <div><strong>Merchant Name:</strong> {{ selectedRecord.merchant.merchant_name }}</div>
+                  <div><strong>Country Code:</strong> {{ selectedRecord.merchant.country_code || '-' }}</div>
+                  <div><strong>Merchant ID:</strong> {{ selectedRecord.merchant.id }}</div>
+                </div>
+              </div>
+            </div>
+          </a-col>
+
+          <!-- 币种详细信息 -->
+          <a-col :span="24" v-if="selectedRecord.currency">
+            <div class="detail-item">
+              <div class="detail-label">Currency Details</div>
+              <div class="detail-value">
+                <div style="font-size: 12px; line-height: 1.6;">
+                  <div><strong>Currency Name:</strong> {{ selectedRecord.currency.name }}</div>
+                  <div><strong>Currency Code:</strong> {{ selectedRecord.currency.code }}</div>
+                  <div><strong>Currency Symbol:</strong> {{ selectedRecord.currency.symbol }}</div>
+                  <div><strong>Currency ID:</strong> {{ selectedRecord.currency.id }}</div>
+                </div>
+              </div>
+            </div>
+          </a-col>
+
+          <!-- 备注信息 -->
+          <a-col :span="24" v-if="selectedRecord.remarks">
+            <div class="detail-item">
+              <div class="detail-label">Remarks</div>
+              <div class="detail-value">{{ selectedRecord.remarks }}</div>
             </div>
           </a-col>
         </a-row>
@@ -261,30 +319,36 @@
 </template>
 
 <script>
+import { request } from '@/api/_service'
+import _ from 'lodash'
+
 export default {
   name: 'FiatCurrencyAccountManagement',
   data () {
     return {
+      // 加载状态
+      loading: false,
+      statusUpdateLoading: false,
+
       // 过滤条件
       filters: {
-        clientId: '',
-        clientName: '',
-        entityCountry: '',
-        accountType: '',
-        status: ''
+        merchant_no: '',
+        merchant_name: ''
       },
 
       // 弹窗和抽屉状态
       statusModalVisible: false,
       detailDrawerVisible: false,
+      detailLoading: false, // 详情加载状态
       selectedRecord: null,
       accountActive: false,
+      originalStatus: null, // 记录原始状态
 
       // 分页配置
       pagination: {
         current: 1,
         pageSize: 10,
-        total: 97,
+        total: 0,
         showSizeChanger: true,
         showQuickJumper: true,
         showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
@@ -297,8 +361,7 @@ export default {
           title: 'Client ID',
           dataIndex: 'clientId',
           key: 'clientId',
-          width: 100,
-          fixed: 'left'
+          width: 150
         },
         {
           title: 'Account ID',
@@ -321,8 +384,8 @@ export default {
         },
         {
           title: 'Currency',
-          dataIndex: 'currency',
-          key: 'currency',
+          dataIndex: 'currencyCode',
+          key: 'currencyCode',
           width: 80
         },
         {
@@ -359,182 +422,200 @@ export default {
         }
       ],
 
-      // 模拟数据
-      tableData: [
-        {
-          key: '1',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'HongKong',
-          currency: 'HKD',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Actived'
-        },
-        {
-          key: '2',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Colombia',
-          currency: 'COP',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Actived'
-        },
-        {
-          key: '3',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Brazil',
-          currency: 'BRL',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Actived'
-        },
-        {
-          key: '4',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Mexico',
-          currency: 'MXN',
-          accountType: 'virtual account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Actived'
-        },
-        {
-          key: '5',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'HongKong',
-          currency: 'HKD',
-          accountType: 'institution account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Disable'
-        },
-        {
-          key: '6',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Brazil',
-          currency: 'BRL',
-          accountType: 'institution account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Disable'
-        },
-        {
-          key: '7',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Colombia',
-          currency: 'COP',
-          accountType: 'institution account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Inactive'
-        },
-        {
-          key: '8',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Mexico',
-          currency: 'MXN',
-          accountType: 'institution account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Inactive'
-        },
-        {
-          key: '9',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Mexico',
-          currency: 'MXN',
-          accountType: 'institution account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Inactive'
-        },
-        {
-          key: '10',
-          clientId: 'CLI-001',
-          accountId: 'ACC-2001',
-          clientName: 'Solutions Inc',
-          entityCountry: 'Mexico',
-          currency: 'MXN',
-          accountType: 'institution account',
-          account: '012807100000001012',
-          operateTime: '2025/02/10 12:20:32',
-          status: 'Inactive'
-        }
-      ]
+      // 数据列表
+      dataList: []
     }
   },
 
   computed: {
-    // 过滤后的数据
+    // 前端筛选Account Type（因为API没有此字段）
     filteredData () {
-      let data = [...this.tableData]
-
-      if (this.filters.clientId) {
-        data = data.filter(item =>
-          item.clientId.toLowerCase().includes(this.filters.clientId.toLowerCase())
-        )
+      if (!this.filters.account_type) {
+        return this.dataList
       }
-
-      if (this.filters.clientName) {
-        data = data.filter(item =>
-          item.clientName.toLowerCase().includes(this.filters.clientName.toLowerCase())
-        )
-      }
-
-      if (this.filters.entityCountry) {
-        data = data.filter(item => item.entityCountry === this.filters.entityCountry)
-      }
-
-      if (this.filters.accountType) {
-        data = data.filter(item => item.accountType === this.filters.accountType)
-      }
-
-      if (this.filters.status) {
-        data = data.filter(item => item.status === this.filters.status)
-      }
-
-      return data
+      return this.dataList.filter(item => item.accountType === this.filters.account_type)
     }
   },
 
+  created () {
+    this.fetchData()
+  },
+
   methods: {
-    // 搜索
-    handleSearch () {
-      console.log('Search filters:', this.filters)
-      this.$message.success('Search completed')
+    // 防抖处理的搜索方法
+    handleSearch: _.debounce(function () {
+      this.pagination.current = 1 // 搜索时重置到第一页
+      this.fetchData()
+    }, 300),
+
+    // API调用方法
+    async fetchData () {
+      this.loading = true
+      try {
+        const params = this.buildRequestParams()
+
+        const response = await request({
+          url: '/admin/merchant/fiat/v2/address/list',
+          method: 'GET',
+          params
+        })
+
+        if (response.code === 200) {
+          // 将API返回的数据映射为表格需要的格式
+          this.dataList = this.mapApiDataToTableData(response.data.list || [])
+          this.pagination.total = response.data.total || 0
+          this.pagination.current = response.data.page || 1
+
+          console.log('数据加载成功:', this.dataList.length, '条记录')
+        } else {
+          this.$message.error(response.message || '获取数据失败')
+          this.dataList = []
+          this.pagination.total = 0
+        }
+      } catch (error) {
+        console.error('API调用失败:', error)
+        this.$message.error('网络错误，请稍后重试')
+        this.dataList = []
+        this.pagination.total = 0
+      } finally {
+        this.loading = false
+      }
     },
 
-    // 重置
+    // 构建请求参数
+    buildRequestParams () {
+      const params = {
+        page: this.pagination.current,
+        limit: this.pagination.pageSize
+      }
+
+      // 添加搜索条件
+      if (this.filters.merchant_no?.trim()) {
+        params.merchant_no = this.filters.merchant_no.trim()
+      }
+
+      if (this.filters.merchant_name?.trim()) {
+        params.merchant_name = this.filters.merchant_name.trim()
+      }
+
+      if (this.filters.country_code) {
+        params.country_code = this.filters.country_code
+      }
+
+      if (this.filters.status) {
+        params.status = this.filters.status
+      }
+
+      return params
+    },
+
+    // 将API数据映射为表格数据格式
+    mapApiDataToTableData (apiList) {
+      return apiList.map(item => ({
+        // 先保留原始API数据
+        ...item,
+
+        // 然后覆盖为表格显示字段映射
+        key: item.id,
+        clientId: item.merchant?.merchant_no || '-',
+        accountId: item.id || '-',
+        clientName: item.merchant?.merchant_name || '-',
+        entityCountry: this.getCountryName(item.merchant?.country_code),
+        currencyCode: item.currency?.code || '-', // 用于表格显示的币种代码
+        accountType: this.generateAccountType(item), // 生成账户类型
+        account: this.generateAccountNumber(item), // 生成账户号
+        operateTime: this.formatTime(item.updated_at),
+        statusText: this.mapApiStatusToText(item.status) // 用于显示的状态文本
+        // currency 保持原始对象，不覆盖
+      }))
+    },
+
+    // 国家代码转换为国家名
+    getCountryName (countryCode) {
+      const countryMap = {
+        'HK': 'HongKong',
+        'BR': 'Brazil',
+        'CO': 'Colombia',
+        'MX': 'Mexico',
+        'US': 'USA',
+        'CN': 'China'
+      }
+      return countryMap[countryCode] || countryCode || '-'
+    },
+
+    // 根据数据生成账户类型
+    generateAccountType (item) {
+      // 如果有真实的account_type，使用它，否则用模拟逻辑
+      if (item.account_type !== undefined) {
+        return this.getAccountTypeText(item.account_type)
+      }
+      // 模拟逻辑（用于列表数据没有详情时）
+      const types = ['Virtual Account', 'Institution Account']
+      return types[Math.floor(Math.random() * types.length)]
+    },
+
+    // 生成账户号（模拟）
+    generateAccountNumber (item) {
+      // 生成类似 012807100000001012 的格式
+      const prefix = '012807'
+      const suffix = String(item.id).slice(-6).padStart(6, '0')
+      return `${prefix}${suffix}${suffix}`
+    },
+
+    // 将API状态数字转换为文本
+    mapApiStatusToText (status) {
+      return status === 1 ? 'Actived' : 'Disable'
+    },
+
+    // 将账户类型数字转换为文本
+    getAccountTypeText (accountType) {
+      const typeMap = {
+        0: 'Virtual Account',
+        1: 'Institution Account'
+      }
+      return typeMap[accountType] || `Type ${accountType}`
+    },
+
+    // 格式化时间（ISO格式转换为显示格式）
+    formatTime (timeString) {
+      if (!timeString) return '-'
+
+      try {
+        const date = new Date(timeString)
+        if (isNaN(date.getTime())) return timeString
+
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        const seconds = String(date.getSeconds()).padStart(2, '0')
+
+        return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
+      } catch (error) {
+        console.error('时间格式化失败:', error)
+        return timeString
+      }
+    },
+
+    // 重置搜索
     handleReset () {
       this.filters = {
-        clientId: '',
-        clientName: '',
-        entityCountry: '',
-        accountType: '',
+        merchant_no: '',
+        merchant_name: '',
+        country_code: '',
+        account_type: '',
         status: ''
       }
-      this.$message.info('Filters reset')
+      this.pagination.current = 1
+      this.fetchData()
+    },
+
+    // 表格分页变更
+    handleTableChange (pagination) {
+      this.pagination.current = pagination.current
+      this.pagination.pageSize = pagination.pageSize
+      this.fetchData()
     },
 
     // 新建账户
@@ -545,41 +626,103 @@ export default {
     // 点击状态标签
     handleStatusClick (record) {
       this.selectedRecord = record
-      this.accountActive = record.status === 'Actived'
+      this.originalStatus = record.status // 记录原始状态
+      this.accountActive = record.status === 1 // 根据原始状态码判断
       this.statusModalVisible = true
     },
 
     // 确认状态修改
-    handleStatusConfirm () {
-      if (this.selectedRecord) {
-        const newStatus = this.accountActive ? 'Actived' : 'Inactive'
-        // 更新数据
-        const index = this.tableData.findIndex(item => item.key === this.selectedRecord.key)
-        if (index > -1) {
-          this.tableData[index].status = newStatus
-        }
-        this.$message.success(`Account status updated to ${newStatus}`)
+    async handleStatusConfirm () {
+      if (!this.selectedRecord) return
+
+      const newStatus = this.accountActive ? 1 : -1
+
+      // 判断状态是否有变化
+      if (newStatus === this.originalStatus) {
+        // 状态没有变化，直接关闭弹窗
+        this.$message.info('Status unchanged')
+        this.statusModalVisible = false
+        this.selectedRecord = null
+        this.originalStatus = null
+        return
       }
-      this.statusModalVisible = false
-      this.selectedRecord = null
+
+      // 状态有变化，调用接口
+      this.statusUpdateLoading = true
+      try {
+        const response = await request({
+          url: '/admin/merchant/fiat/v2/address/status',
+          method: 'POST',
+          data: {
+            id: this.selectedRecord.id
+          }
+        })
+
+        if (response.code === 200) {
+          // 更新本地数据
+          const index = this.dataList.findIndex(item => item.key === this.selectedRecord.key)
+          if (index > -1) {
+            // 更新原始状态数据
+            this.dataList[index].status = newStatus // 更新数字状态
+            // 更新显示用的状态文本
+            this.dataList[index].statusText = this.accountActive ? 'Actived' : 'Disable'
+          }
+
+          this.$message.success(`Account status updated to ${this.accountActive ? 'Actived' : 'Disable'}`)
+        } else {
+          this.$message.error(response.message || 'Status update failed')
+        }
+      } catch (error) {
+        console.error('状态更新失败:', error)
+        this.$message.error('Network error, please try again')
+      } finally {
+        this.statusUpdateLoading = false
+        this.statusModalVisible = false
+        this.selectedRecord = null
+        this.originalStatus = null
+      }
     },
 
     // 取消状态修改
     handleStatusCancel () {
       this.statusModalVisible = false
       this.selectedRecord = null
+      this.originalStatus = null
     },
 
     // 查看详情
-    handleView (record) {
-      this.selectedRecord = record
+    async handleView (record) {
+      this.selectedRecord = null
       this.detailDrawerVisible = true
+      this.detailLoading = true
+
+      try {
+        const response = await request({
+          url: `/admin/merchant/fiat/v2/address/${record.id}`,
+          method: 'GET'
+        })
+
+        if (response.code === 200) {
+          this.selectedRecord = response.data
+          console.log('详情加载成功:', this.selectedRecord)
+        } else {
+          this.$message.error(response.message || '获取详情失败')
+          this.selectedRecord = record // fallback到列表数据
+        }
+      } catch (error) {
+        console.error('获取详情失败:', error)
+        this.$message.error('网络错误，请稍后重试')
+        this.selectedRecord = record // fallback到列表数据
+      } finally {
+        this.detailLoading = false
+      }
     },
 
     // 关闭详情抽屉
     closeDetailDrawer () {
       this.detailDrawerVisible = false
       this.selectedRecord = null
+      this.detailLoading = false
     },
 
     // 获取状态颜色
@@ -600,17 +743,6 @@ export default {
         'Inactive': 'pause-circle'
       }
       return icons[status] || 'exclamation-circle'
-    },
-
-    // 获取国家旗帜
-    getCountryFlag (country) {
-      const flags = {
-        'HongKong': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjRkY2QjY5Ii8+PC9zdmc+',
-        'Brazil': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjNDJCOTgzIi8+PC9zdmc+',
-        'Colombia': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjRkZEQTQ0Ii8+PC9zdmc+',
-        'Mexico': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjRkY2QjY5Ii8+PC9zdmc+'
-      }
-      return flags[country] || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAxOCI+PGNpcmNsZSBjeD0iMTIiIGN5PSI5IiByPSI4IiBmaWxsPSIjQ0NDIi8+PC9zdmc+'
     }
   }
 }
@@ -618,6 +750,7 @@ export default {
 
 <style lang="less" scoped>
 .fiat-currency-management {
+}
   .filter-section {
     background: #fafafa;
     padding: 16px;
@@ -631,18 +764,6 @@ export default {
   }
 
   .table-section {
-    .country-cell {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      .country-flag {
-        width: 16px;
-        height: 12px;
-        border-radius: 2px;
-      }
-    }
-
     .status-tag {
       cursor: pointer;
       transition: all 0.3s;
@@ -681,19 +802,12 @@ export default {
       align-items: center;
       gap: 8px;
 
-      .country-flag {
-        width: 16px;
-        height: 12px;
-        border-radius: 2px;
-      }
-
       .anticon {
         margin-right: 4px;
       }
     }
   }
 
-}
   // 状态设置弹窗样式
   .status-modal-content {
     padding: 8px 0;

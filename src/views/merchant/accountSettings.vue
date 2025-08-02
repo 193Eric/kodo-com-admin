@@ -15,7 +15,7 @@
       <a-tab-pane key="withdrawal-address" tab="Withdrawal address management">
         <withdrawal-address-tab />
       </a-tab-pane>
-      <a-tab-pane key="recharge" tab="Recharge management">
+      <a-tab-pane key="recharge" tab="Deposit management">
         <RechargeManagementTab />
       </a-tab-pane>
       <a-tab-pane key="withdrawal" tab="Withdrawal management">
